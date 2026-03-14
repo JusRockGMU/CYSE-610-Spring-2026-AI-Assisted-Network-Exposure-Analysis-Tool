@@ -1,0 +1,152 @@
+{
+  "description": "InfoSecWarrior dataset - my-file-server-1",
+  "source": "InfoSecWarrior/Vulnerable-Box-Resources GitHub repository",
+  "created": "2026-03-14",
+  "target_directory": "datasets/vulnerable-box-resources/Infosecwarrior/My-File-Server-1",
+  "hosts": [
+    {
+      "ip": "192.168.1.39",
+      "hostname": "my-file-server-1",
+      "vulnerabilities": [
+        {
+          "port": 21,
+          "service": "ftp",
+          "cve": "CWE-284",
+          "description": "FTP anonymous login allowed with writable directory",
+          "severity": "CRITICAL"
+        },
+        {
+          "port": 2049,
+          "service": "nfs",
+          "cve": "CVE-2004-0175",
+          "description": "NFS export misconfiguration allows unauthorized file access",
+          "severity": "HIGH"
+        },
+        {
+          "port": 445,
+          "service": "microsoft-ds",
+          "cve": "CVE-2017-0144",
+          "description": "SMB service exposed",
+          "severity": "CRITICAL"
+        },
+        {
+          "port": 80,
+          "service": "http",
+          "cve": "CONFIG-001",
+          "description": "Unencrypted HTTP service with TRACE method enabled",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-enum] [javascript] [info] 192.168.1.39:445 [\"OSVersion: 6.1.0\",\"NetBIOSComputerName: FILESERVER\",\"NetBIOSDomainName: FILESERVER\",\"DNSComputerNamen: localhost\",\"DNSComputerName: localhost\",\"ForestName:\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb2-capabilities] [javascript] [info] 192.168.1.39:445 [\"[\"DFSSupport\",\"LargeMTU\",\"Leasing\"]\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb2-server-time] [javascript] [info] 192.168.1.39:445 [\"SystemTime: 2024-09-29T15:32:32.000Z ServerStartTime: 2009-04-22T19:24:48.000Z\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-os-detect] [javascript] [info] 192.168.1.39:445 [\"6.1.0\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-signing-not-required] [javascript] [medium] 192.168.1.39:445",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[http-trace:trace-request] [http] [info] http://192.168.1.39:80",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[http-trace:options-request] [http] [info] http://192.168.1.39:80",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[waf-detect:apachegeneric] [http] [info] http://192.168.1.39:80",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-signing-not-required] [javascript] [medium] 192.168.1.39:445",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-enum] [javascript] [info] 192.168.1.39:445 [\"ForestName:\",\"OSVersion: 6.1.0\",\"NetBIOSComputerName: FILESERVER\",\"NetBIOSDomainName: FILESERVER\",\"DNSComputerNamen: localhost\",\"DNSComputerName: localhost\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb2-capabilities] [javascript] [info] 192.168.1.39:445 [\"[\"DFSSupport\",\"LargeMTU\",\"Leasing\"]\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb2-server-time] [javascript] [info] 192.168.1.39:445 [\"SystemTime: 2024-09-29T14:54:39.000Z ServerStartTime: 2009-04-22T19:24:48.000Z\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[smb-os-detect] [javascript] [info] 192.168.1.39:445 [\"6.1.0\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-diffie-hellman-logjam] [javascript] [low] 192.168.1.39:22",
+          "severity": "LOW"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-auth-methods] [javascript] [info] 192.168.1.39:22 [\"[\"publickey\",\"gssapi-keyex\",\"gssapi-with-mic\"]\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-cbc-mode-ciphers] [javascript] [low] 192.168.1.39:22",
+          "severity": "LOW"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-server-enumeration] [javascript] [info] 192.168.1.39:22 [\"SSH-2.0-OpenSSH_7.4\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-weakkey-exchange-algo] [javascript] [low] 192.168.1.39:22",
+          "severity": "LOW"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ssh-sha1-hmac-algo] [javascript] [info] 192.168.1.39:22",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[CVE-2023-48795] [javascript] [medium] 192.168.1.39:22 [\"Vulnerable to Terrapin\"]",
+          "severity": "MEDIUM"
+        },
+        {
+          "source": "nuclei",
+          "description": "[rsync-list-modules] [javascript] [low] 192.168.1.39:21 [\"421  There  are  too  many  connections  from  your  internet  address.\"]",
+          "severity": "LOW"
+        },
+        {
+          "source": "nuclei",
+          "description": "[ftp-anonymous-login] [tcp] [medium] 192.168.1.39:21",
+          "severity": "MEDIUM"
+        }
+      ]
+    }
+  ]
+}
