@@ -153,6 +153,10 @@ ai-network-exposure-analysis/
 
 ## Pipeline Flow
 
+![Data Flow Diagram](docs/dfd_pipeline.png)
+
+The vulnerability analysis pipeline follows these stages:
+
 ```
 1. Parse      → Read nmap XML/text and extract host/port/service data
 2. Process    → Normalize data, categorize risks, extract features
