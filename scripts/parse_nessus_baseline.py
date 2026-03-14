@@ -110,7 +110,7 @@ def main():
         print("No data extracted from Nessus file")
         return
     
-    print(f"\n✓ Extracted data from {len(hosts)} hosts")
+    print(f"\n Extracted data from {len(hosts)} hosts")
     
     # Summary
     total_vulns = 0
@@ -143,7 +143,7 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(baseline, f, indent=2)
     
-    print(f"\n✓ Baseline created: {output_path}")
+    print(f"\n Baseline created: {output_path}")
     print(f"  Total hosts: {len(hosts)}")
     print(f"  Total vulnerabilities: {total_vulns}")
 

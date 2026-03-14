@@ -6,11 +6,11 @@ A comprehensive vulnerability analysis tool that processes nmap scan data, ident
 
 ## Features
 
-- 🔍 **Nmap Scan Parsing** - Supports XML and text format nmap outputs
-- 🔧 **Data Processing** - Normalizes and enriches scan data with risk categorization
-- 🤖 **AI-Powered Analysis** - Optional Anthropic Claude integration for contextual insights
-- 📊 **Professional Reports** - Generates JSON (machine-readable) and HTML (presentation-ready) reports
-- 📈 **Evaluation Framework** - Compares results against baseline data with precision/recall metrics
+-  **Nmap Scan Parsing** - Supports XML and text format nmap outputs
+-  **Data Processing** - Normalizes and enriches scan data with risk categorization
+-  **AI-Powered Analysis** - Optional Anthropic Claude integration for contextual insights
+-  **Professional Reports** - Generates JSON (machine-readable) and HTML (presentation-ready) reports
+-  **Evaluation Framework** - Compares results against baseline data with precision/recall metrics
 - ⚡ **Automated Workflow** - Comprehensive Makefile for easy setup and operation
 - **Real Public Dataset**: Uses InfoSecWarrior/Vulnerable-Box-Resources (822 scans, 11 targets)
 

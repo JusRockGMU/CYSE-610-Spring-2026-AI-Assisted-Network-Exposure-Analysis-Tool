@@ -50,38 +50,37 @@ class VulnerabilityPipeline:
         
         self.log("Starting pipeline...")
         
-        print("📥 Step 1: Parsing nmap scan data...")
+        print("Step 1: Parsing nmap scan data...")
         if input_path.endswith('.xml'):
             scan_data = self.parser.parse_xml(input_path)
         else:
             scan_data = self.parser.parse_text(input_path)
         
         summary = self.parser.get_summary()
-        print(f"   ✓ Parsed {summary['total_hosts']} hosts with {summary['total_open_ports']} open ports")
+        print(f"   Parsed {summary['total_hosts']} hosts with {summary['total_open_ports']} open ports")
         
-        print("\n🔧 Step 2: Processing and normalizing data...")
+        print("\nStep 2: Processing and normalizing data...")
         processed_data = self.processor.process(scan_data)
         
         processed_path = os.path.join('data/processed', f'processed_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
         self.processor.save_json(processed_path)
         
         stats = self.processor.get_statistics()
-        print(f"   ✓ Processed {stats['total_hosts']} hosts, {stats['total_services']} services")
-        print(f"   ✓ Identified {stats['critical_services']} critical services")
+        print(f"   Processed {stats['total_hosts']} hosts, {stats['total_services']} services")
+        print(f"   Identified {stats['critical_services']} critical services")
         
-        print("\n🔍 Step 3: Analyzing vulnerabilities...")
+        print("\nStep 3: Analyzing vulnerabilities...")
         analysis_data = self.analyzer.analyze(processed_data)
         
         summary = analysis_data['summary']
-        print(f"   ✓ Found {summary['total_vulnerabilities']} vulnerabilities")
-        print(f"   ✓ Critical: {summary['critical_count']}, High: {summary['high_count']}, " +
-              f"Medium: {summary['medium_count']}, Low: {summary['low_count']}")
+        print(f"   Found {summary['total_vulnerabilities']} vulnerabilities")
+        print(f"   Critical: {summary['critical_count']}, High: {summary['high_count']}, Medium: {summary['medium_count']}, Low: {summary['low_count']}")
         
-        print("\n📊 Step 4: Generating reports...")
+        print("\nStep 4: Generating reports...")
         report_paths = self.reporter.generate(analysis_data, output_dir)
         
-        print(f"   ✓ JSON report: {report_paths['json']}")
-        print(f"   ✓ HTML report: {report_paths['html']}")
+        print(f"   JSON report: {report_paths['json']}")
+        print(f"   HTML report: {report_paths['html']}")
         
         results = {
             'scan_data': scan_data,
@@ -91,7 +90,7 @@ class VulnerabilityPipeline:
         }
         
         if evaluate and baseline_path:
-            print("\n📈 Step 5: Evaluating against baseline...")
+            print("\nStep 5: Evaluating against baseline...")
             try:
                 self.evaluator.load_baseline(baseline_path)
                 evaluation = self.evaluator.evaluate(analysis_data)
@@ -100,14 +99,14 @@ class VulnerabilityPipeline:
                 
                 eval_path = os.path.join(output_dir, f'evaluation_{report_paths["timestamp"]}.json')
                 self.evaluator.save_evaluation(eval_path)
-                print(f"   ✓ Evaluation saved: {eval_path}")
+                print(f"   Evaluation saved: {eval_path}")
                 
                 results['evaluation'] = evaluation
             except Exception as e:
-                print(f"   ⚠ Evaluation failed: {e}")
+                print(f"   Warning: Evaluation failed: {e}")
         
         print("\n" + "="*60)
-        print("  ✅ PIPELINE COMPLETE")
+        print("  PIPELINE COMPLETE")
         print("="*60 + "\n")
         
         return results
@@ -180,7 +179,7 @@ def run_demo():
     with open(demo_path, 'w') as f:
         f.write(demo_scan)
     
-    print(f"✓ Created demo scan file: {demo_path}\n")
+    print(f"Created demo scan file: {demo_path}\n")
     
     pipeline = VulnerabilityPipeline(use_ai=False, verbose=True)
     pipeline.run(demo_path)
@@ -252,7 +251,7 @@ Examples:
         return 0
     
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n Error: {e}")
         if args.verbose:
             import traceback
             traceback.print_exc()

@@ -140,7 +140,7 @@ def main():
         
         if analysis:
             targets.append(analysis)
-            print(f"  ✓ Hosts: {analysis['hosts']}, Ports: {analysis['ports']}, "
+            print(f"   Hosts: {analysis['hosts']}, Ports: {analysis['ports']}, "
                   f"Services: {len(analysis['services'])}, Score: {analysis['score']}")
             print(f"    Vulnerable services: {analysis['vulnerability_indicators']}")
             print(f"    Tool outputs: {', '.join(analysis['tool_outputs']) if analysis['tool_outputs'] else 'None'}")
@@ -191,7 +191,7 @@ def main():
     with open(output_file, 'w') as f:
         json.dump(output, f, indent=2)
     
-    print(f"\n✓ Analysis saved to: {output_file}")
+    print(f"\n Analysis saved to: {output_file}")
     
     # Recommendations
     print("\n" + "="*60)
@@ -203,10 +203,10 @@ def main():
         print(f"  {i}. {target['name']}")
     
     print("\nWhy these 5:")
-    print("  ✓ Highest vulnerability indicators")
-    print("  ✓ Most diverse service coverage")
-    print("  ✓ Have tool outputs for baseline creation")
-    print("  ✓ Version information for CVE mapping")
+    print("   Highest vulnerability indicators")
+    print("   Most diverse service coverage")
+    print("   Have tool outputs for baseline creation")
+    print("   Version information for CVE mapping")
     
     print("\nNext steps:")
     print("  1. Create baselines for these 5 targets")

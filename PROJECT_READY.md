@@ -1,28 +1,28 @@
-# ✅ Project Ready for Midterm
+#  Project Ready for Midterm
 
 **Date:** March 14, 2026  
 **Status:** Clean, tested, and ready to demonstrate
 
 ---
 
-## 🎯 What's Ready
+##  What's Ready
 
 ### Working Pipeline
-✅ **Complete end-to-end vulnerability analysis**
+ **Complete end-to-end vulnerability analysis**
 - Parses real nmap scans
 - Detects vulnerabilities using rule-based methods
 - Generates professional reports (JSON + HTML)
 - Evaluates accuracy against baseline data
 
 ### Real Public Dataset
-✅ **InfoSecWarrior/Vulnerable-Box-Resources**
+ **InfoSecWarrior/Vulnerable-Box-Resources**
 - Source: https://github.com/InfoSecWarrior/Vulnerable-Box-Resources
 - 822 real nmap scans from September 2024
 - 11 vulnerable targets available
 - Publicly citable and verifiable
 
 ### Tested Example
-✅ **My-File-Server-1 (Primary Target)**
+ **My-File-Server-1 (Primary Target)**
 - Real nmap scan: `data/raw/infosecwarrior_fileserver.xml`
 - Baseline: `data/baseline/infosecwarrior_fileserver.json` (26 vulnerabilities)
 - **Results:**
@@ -32,7 +32,7 @@
 
 ---
 
-## 📁 Project Structure (Clean)
+##  Project Structure (Clean)
 
 ```
 ai-network-exposure-analysis/
@@ -69,7 +69,7 @@ ai-network-exposure-analysis/
 
 ---
 
-## 🚀 Quick Demo Commands
+##  Quick Demo Commands
 
 ### Run Analysis
 ```bash
@@ -87,17 +87,17 @@ open data/reports/vulnerability_report_*.html
 
 ### Expected Output
 ```
-✓ Parsed 1 hosts with 8 open ports
-✓ Processed 1 hosts, 8 services
-✓ Found 5 vulnerabilities (3 critical, 1 high, 1 medium)
-✓ JSON report: data/reports/vulnerability_report_*.json
-✓ HTML report: data/reports/vulnerability_report_*.html
-✓ Evaluation: Precision 40%, Recall 40%, F1 0.400
+ Parsed 1 hosts with 8 open ports
+ Processed 1 hosts, 8 services
+ Found 5 vulnerabilities (3 critical, 1 high, 1 medium)
+ JSON report: data/reports/vulnerability_report_*.json
+ HTML report: data/reports/vulnerability_report_*.html
+ Evaluation: Precision 40%, Recall 40%, F1 0.400
 ```
 
 ---
 
-## 📊 For Your Midterm Presentation
+##  For Your Midterm Presentation
 
 ### Key Points to Mention
 
@@ -128,7 +128,7 @@ open data/reports/vulnerability_report_*.html
 
 ---
 
-## 📝 For Your Midterm Report
+##  For Your Midterm Report
 
 ### Dataset Section
 ```
@@ -225,7 +225,7 @@ Reference these files when writing your report:
 
 ---
 
-## 🔄 Next Steps (Optional)
+##  Next Steps (Optional)
 
 ### Before Midterm (if time)
 - Test on 1-2 more targets to show consistency
@@ -241,7 +241,7 @@ Reference these files when writing your report:
 
 ---
 
-## ✅ Checklist
+##  Checklist
 
 - [x] Real public dataset selected and tested
 - [x] Pipeline working end-to-end
@@ -254,7 +254,7 @@ Reference these files when writing your report:
 
 ---
 
-## 🎉 You're Ready!
+##  You're Ready!
 
 Your project is **clean, tested, and ready** for the midterm demonstration.
 
@@ -268,4 +268,4 @@ python main.py --input data/raw/infosecwarrior_fileserver.xml \
 open data/reports/vulnerability_report_*.html
 ```
 
-**Good luck with your presentation!** 🚀
+**Good luck with your presentation!** 

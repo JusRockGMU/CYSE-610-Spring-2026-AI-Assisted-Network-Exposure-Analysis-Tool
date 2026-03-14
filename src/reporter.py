@@ -278,18 +278,18 @@ class ReportGenerator:
                         <span class="risk-badge {{ vuln.severity|lower }}">{{ vuln.severity }}</span>
                     </div>
                     <div class="vuln-recommendation">
-                        <strong>💡 Recommendation:</strong> {{ vuln.recommendation }}
+                        <strong> Recommendation:</strong> {{ vuln.recommendation }}
                     </div>
                 </div>
                 {% endfor %}
                 {% else %}
-                <p style="color: #27ae60; padding: 10px;">✓ No vulnerabilities detected</p>
+                <p style="color: #27ae60; padding: 10px;"> No vulnerabilities detected</p>
                 {% endif %}
             </div>
             {% endfor %}
         {% else %}
             <div class="no-vulns">
-                ✓ No hosts with vulnerabilities detected
+                 No hosts with vulnerabilities detected
             </div>
         {% endif %}
 

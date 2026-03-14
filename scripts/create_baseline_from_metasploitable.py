@@ -211,7 +211,7 @@ def create_baseline(scan_xml_path, output_path):
                 'description': vuln['description'],
                 'severity': vuln['severity']
             })
-            print(f"  ✓ Port {port_num} ({service_name}): {vuln['severity']} - {vuln['cve']}")
+            print(f"   Port {port_num} ({service_name}): {vuln['severity']} - {vuln['cve']}")
     
     baseline = {
         'description': 'Metasploitable 2 baseline vulnerabilities',
@@ -233,7 +233,7 @@ def create_baseline(scan_xml_path, output_path):
     with open(output_path, 'w') as f:
         json.dump(baseline, f, indent=2)
     
-    print(f"\n✓ Baseline created: {output_path}")
+    print(f"\n Baseline created: {output_path}")
     print(f"  Total vulnerabilities: {len(vulnerabilities)}")
     print(f"  Critical: {sum(1 for v in vulnerabilities if v['severity'] == 'CRITICAL')}")
     print(f"  High: {sum(1 for v in vulnerabilities if v['severity'] == 'HIGH')}")

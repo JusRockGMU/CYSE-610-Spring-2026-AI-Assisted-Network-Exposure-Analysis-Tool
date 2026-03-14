@@ -8,18 +8,18 @@
 ## What Was Removed
 
 ### Unused Datasets (28.6 MB freed)
-- ❌ `datasets/metasploitable-pentest/` (20 MB)
-- ❌ `datasets/comat-ceh-report/` (4.3 MB)
-- ❌ `datasets/vulnerability-assessment/` (4.3 MB)
+-  `datasets/metasploitable-pentest/` (20 MB)
+-  `datasets/comat-ceh-report/` (4.3 MB)
+-  `datasets/vulnerability-assessment/` (4.3 MB)
 
 **Reason:** These datasets did not have usable nmap XML scans for our pipeline.
 
 ### Synthetic/Demo Data
-- ❌ `data/raw/demo_scan.xml` - Synthetic demo data
-- ❌ `data/raw/metasploitable2_real.xml` - Synthetic data (not from actual scan)
-- ❌ `data/baseline/sample_baseline.json` - Demo baseline
-- ❌ `data/baseline/metasploitable2_real.json` - Synthetic baseline
-- ❌ `data/baseline/zephinzer_nessus_baseline.json` - From unused dataset
+-  `data/raw/demo_scan.xml` - Synthetic demo data
+-  `data/raw/metasploitable2_real.xml` - Synthetic data (not from actual scan)
+-  `data/baseline/sample_baseline.json` - Demo baseline
+-  `data/baseline/metasploitable2_real.json` - Synthetic baseline
+-  `data/baseline/zephinzer_nessus_baseline.json` - From unused dataset
 
 **Reason:** Not needed - we have real public data now.
 
@@ -28,21 +28,21 @@
 ## What Was Kept
 
 ### Active Dataset
-✅ **InfoSecWarrior/Vulnerable-Box-Resources** (20 MB)
+ **InfoSecWarrior/Vulnerable-Box-Resources** (20 MB)
 - 11 targets with real nmap scans
 - 822 total scan files
 - Tool outputs for baseline creation
 
 ### Active Data Files
-✅ `data/raw/infosecwarrior_fileserver.xml` - Real nmap scan (My-File-Server-1)
-✅ `data/baseline/infosecwarrior_fileserver.json` - Validated baseline (26 vulnerabilities)
+ `data/raw/infosecwarrior_fileserver.xml` - Real nmap scan (My-File-Server-1)
+ `data/baseline/infosecwarrior_fileserver.json` - Validated baseline (26 vulnerabilities)
 
 ### Documentation (Preserved for Report)
-✅ `docs/DATASET_SELECTION_PROCESS.md` - How we chose the dataset
-✅ `DATASET_COMPARISON.md` - Full comparison of all 4 datasets tested
-✅ `datasets/analysis_results.json` - Test results
-✅ `datasets/comprehensive_test_results.json` - Detailed analysis
-✅ `datasets/target_selection.json` - Target ranking data
+ `docs/DATASET_SELECTION_PROCESS.md` - How we chose the dataset
+ `DATASET_COMPARISON.md` - Full comparison of all 4 datasets tested
+ `datasets/analysis_results.json` - Test results
+ `datasets/comprehensive_test_results.json` - Detailed analysis
+ `datasets/target_selection.json` - Target ranking data
 
 ---
 
@@ -66,7 +66,7 @@ data/
 datasets/
 ├── vulnerable-box-resources/            # InfoSecWarrior dataset (20 MB)
 │   └── Infosecwarrior/                  # 11 targets
-│       ├── My-File-Server-1/            # Primary target ✓
+│       ├── My-File-Server-1/            # Primary target 
 │       ├── My-File-Server-2/            # Available
 │       ├── My-Web-Server/               # Available
 │       ├── It's-October/                # Available
@@ -90,15 +90,15 @@ datasets/
 ## What This Means
 
 ### For Midterm (March 18)
-✅ **Clean, focused project** with only necessary files
-✅ **Real public dataset** (InfoSecWarrior) ready to cite
-✅ **Working example** (My-File-Server-1) tested and validated
-✅ **Documentation** of selection process for report
+ **Clean, focused project** with only necessary files
+ **Real public dataset** (InfoSecWarrior) ready to cite
+ **Working example** (My-File-Server-1) tested and validated
+ **Documentation** of selection process for report
 
 ### For Future Work
-✅ **4 additional targets** ready to use from InfoSecWarrior
-✅ **Test results preserved** for reference
-✅ **Scripts available** to process more targets if needed
+ **4 additional targets** ready to use from InfoSecWarrior
+ **Test results preserved** for reference
+ **Scripts available** to process more targets if needed
 
 ---
 
@@ -123,10 +123,10 @@ datasets/
 
 ## Project is Now Ready
 
-✅ **Clean** - Only necessary files remain
-✅ **Documented** - Selection process preserved for report
-✅ **Validated** - Real public data tested and working
-✅ **Citable** - Can reference InfoSecWarrior GitHub repo
-✅ **Scalable** - 10 more targets available for future work
+ **Clean** - Only necessary files remain
+ **Documented** - Selection process preserved for report
+ **Validated** - Real public data tested and working
+ **Citable** - Can reference InfoSecWarrior GitHub repo
+ **Scalable** - 10 more targets available for future work
 
 The project is streamlined and ready for your midterm demonstration.

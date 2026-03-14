@@ -133,7 +133,7 @@ def create_sample_real_dataset():
     with open(scan_path, 'w') as f:
         f.write(metasploitable_scan)
     
-    print(f"✓ Created scan file: {scan_path}")
+    print(f" Created scan file: {scan_path}")
     
     # Create baseline with REAL documented vulnerabilities
     baseline = {
@@ -346,14 +346,14 @@ def create_sample_real_dataset():
     with open(baseline_path, 'w') as f:
         json.dump(baseline, f, indent=2)
     
-    print(f"✓ Created baseline: {baseline_path}")
+    print(f" Created baseline: {baseline_path}")
     print(f"\nDataset Statistics:")
     print(f"  Total vulnerabilities: {len(baseline['hosts'][0]['vulnerabilities'])}")
     print(f"  Critical: {sum(1 for v in baseline['hosts'][0]['vulnerabilities'] if v['severity'] == 'CRITICAL')}")
     print(f"  High: {sum(1 for v in baseline['hosts'][0]['vulnerabilities'] if v['severity'] == 'HIGH')}")
     print(f"  Medium: {sum(1 for v in baseline['hosts'][0]['vulnerabilities'] if v['severity'] == 'MEDIUM')}")
     
-    print(f"\n✓ Real dataset created successfully!")
+    print(f"\n Real dataset created successfully!")
     print(f"\nThis dataset is based on:")
     print(f"  - Official Metasploitable 2 documentation")
     print(f"  - NIST National Vulnerability Database (NVD)")

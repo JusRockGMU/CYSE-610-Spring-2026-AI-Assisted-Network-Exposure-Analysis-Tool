@@ -18,7 +18,7 @@ def clone_repo(repo_url, target_dir):
     print('='*60)
     
     if os.path.exists(target_dir):
-        print(f"⚠️  Directory already exists: {target_dir}")
+        print(f"  Directory already exists: {target_dir}")
         return True
     
     try:
@@ -30,14 +30,14 @@ def clone_repo(repo_url, target_dir):
         )
         
         if result.returncode == 0:
-            print(f"✓ Successfully cloned")
+            print(f" Successfully cloned")
             return True
         else:
-            print(f"✗ Clone failed: {result.stderr}")
+            print(f" Clone failed: {result.stderr}")
             return False
     
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f" Error: {e}")
         return False
 
 
@@ -48,7 +48,7 @@ def analyze_repo(repo_path, repo_name):
     print('='*60)
     
     if not os.path.exists(repo_path):
-        print(f"✗ Repository not found: {repo_path}")
+        print(f" Repository not found: {repo_path}")
         return None
     
     analysis = {
@@ -101,7 +101,7 @@ def analyze_repo(repo_path, repo_name):
                     analysis['other'].append(rel_path)
     
     # Print summary
-    print(f"\n📊 Analysis Results:")
+    print(f"\n Analysis Results:")
     print(f"  Nmap XML files:    {len(analysis['nmap_xml'])}")
     print(f"  Nmap text files:   {len(analysis['nmap_text'])}")
     print(f"  Nessus reports:    {len(analysis['nessus'])}")
@@ -189,7 +189,7 @@ def main():
                 analysis['description'] = dataset['description']
                 results.append(analysis)
         else:
-            print(f"⚠️  Skipping analysis due to clone failure")
+            print(f"  Skipping analysis due to clone failure")
     
     # Save results
     results_file = 'datasets/analysis_results.json'
@@ -209,15 +209,15 @@ def main():
         print(f"  Benchmark reports: {total_reports}")
         
         if total_nmap > 0 and total_reports > 0:
-            print(f"  ✓ GOOD - Has both nmap scans and benchmark reports")
+            print(f"   GOOD - Has both nmap scans and benchmark reports")
         elif total_nmap > 0:
-            print(f"  ⚠️  Has nmap scans but no benchmark reports")
+            print(f"    Has nmap scans but no benchmark reports")
         elif total_reports > 0:
-            print(f"  ⚠️  Has benchmark reports but no nmap scans")
+            print(f"    Has benchmark reports but no nmap scans")
         else:
-            print(f"  ✗ Missing both nmap scans and reports")
+            print(f"   Missing both nmap scans and reports")
     
-    print(f"\n✓ Analysis complete. Results saved to: {results_file}")
+    print(f"\n Analysis complete. Results saved to: {results_file}")
     
     # Recommend best dataset
     print(f"\n{'='*60}")

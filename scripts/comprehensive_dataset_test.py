@@ -58,7 +58,7 @@ def analyze_infosecwarrior():
     base_dir = 'datasets/vulnerable-box-resources/Infosecwarrior'
     
     if not os.path.exists(base_dir):
-        print("❌ Dataset not found")
+        print(" Dataset not found")
         return None
     
     targets = []
@@ -84,7 +84,7 @@ def analyze_infosecwarrior():
                     'services': result['services']
                 })
     
-    print(f"\n✓ Found {len(targets)} valid targets with nmap scans")
+    print(f"\n Found {len(targets)} valid targets with nmap scans")
     print(f"\nSample targets:")
     for target in targets[:5]:
         print(f"  - {target['name']}: {target['hosts']} hosts, {target['ports']} ports")
@@ -109,7 +109,7 @@ def analyze_drt709():
     base_dir = 'datasets/metasploitable-pentest'
     
     if not os.path.exists(base_dir):
-        print("❌ Dataset not found")
+        print(" Dataset not found")
         return None
     
     # Look for any nmap files
@@ -119,7 +119,7 @@ def analyze_drt709():
             if 'nmap' in file.lower() and (file.endswith('.xml') or file.endswith('.nmap')):
                 nmap_files.append(os.path.join(root, file))
     
-    print(f"\n✓ Found {len(nmap_files)} potential nmap files")
+    print(f"\n Found {len(nmap_files)} potential nmap files")
     
     # Test each file
     valid_scans = []
@@ -128,7 +128,7 @@ def analyze_drt709():
             result = test_nmap_xml(nmap_file)
             if result and result.get('valid'):
                 valid_scans.append(nmap_file)
-                print(f"  ✓ Valid: {os.path.basename(nmap_file)}")
+                print(f"   Valid: {os.path.basename(nmap_file)}")
     
     # Look for Nessus reports
     nessus_files = []
@@ -137,7 +137,7 @@ def analyze_drt709():
             if 'nessus' in file.lower():
                 nessus_files.append(os.path.join(root, file))
     
-    print(f"\n✓ Found {len(nessus_files)} Nessus report files")
+    print(f"\n Found {len(nessus_files)} Nessus report files")
     for nessus in nessus_files[:3]:
         print(f"  - {os.path.basename(nessus)}")
     
@@ -160,7 +160,7 @@ def analyze_zephinzer():
     base_dir = 'datasets/comat-ceh-report'
     
     if not os.path.exists(base_dir):
-        print("❌ Dataset not found")
+        print(" Dataset not found")
         return None
     
     # Look for Nessus files
@@ -170,7 +170,7 @@ def analyze_zephinzer():
             if file.endswith('.nessus'):
                 nessus_files.append(os.path.join(root, file))
     
-    print(f"\n✓ Found {len(nessus_files)} Nessus export files")
+    print(f"\n Found {len(nessus_files)} Nessus export files")
     for nessus in nessus_files:
         print(f"  - {os.path.basename(nessus)}")
         # Check file size
@@ -195,7 +195,7 @@ def analyze_rahulkore():
     base_dir = 'datasets/vulnerability-assessment'
     
     if not os.path.exists(base_dir):
-        print("❌ Dataset not found")
+        print(" Dataset not found")
         return None
     
     # Look for all files
@@ -205,7 +205,7 @@ def analyze_rahulkore():
             if not file.startswith('.'):
                 files.append(os.path.join(root, file))
     
-    print(f"\n✓ Found {len(files)} files")
+    print(f"\n Found {len(files)} files")
     for f in files:
         print(f"  - {os.path.basename(f)} ({os.path.getsize(f):,} bytes)")
     
@@ -256,7 +256,7 @@ def main():
     for result in results:
         print(f"\n{result['name']}:")
         print(f"  Quality: {result['quality']}")
-        print(f"  Usable: {'✓ Yes' if result['usable'] else '✗ No'}")
+        print(f"  Usable: {' Yes' if result['usable'] else ' No'}")
         print(f"  Notes: {result['notes']}")
     
     # Save results
@@ -264,7 +264,7 @@ def main():
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)
     
-    print(f"\n✓ Results saved to: {output_file}")
+    print(f"\n Results saved to: {output_file}")
     
     # Recommendations
     print("\n" + "="*60)

@@ -159,7 +159,7 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(baseline, f, indent=2)
     
-    print(f"\n✓ Baseline created: {output_path}")
+    print(f"\n Baseline created: {output_path}")
     print(f"  Total vulnerabilities: {len(baseline['hosts'][0]['vulnerabilities'])}")
     
     # Count by severity

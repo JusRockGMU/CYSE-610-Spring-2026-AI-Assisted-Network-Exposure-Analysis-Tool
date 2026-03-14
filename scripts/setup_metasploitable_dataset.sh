@@ -24,9 +24,9 @@ fi
 echo ""
 echo "Testing connectivity..."
 if ping -c 1 -W 2 "$METASPLOITABLE_IP" > /dev/null 2>&1; then
-    echo "✓ Host is reachable"
+    echo " Host is reachable"
 else
-    echo "✗ Cannot reach $METASPLOITABLE_IP"
+    echo " Cannot reach $METASPLOITABLE_IP"
     echo "  Make sure Metasploitable VM is running"
     exit 1
 fi
@@ -43,7 +43,7 @@ nmap -sV -sC -O -p- \
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "✓ Scan complete!"
+    echo " Scan complete!"
     echo "  XML output: data/raw/metasploitable_scan.xml"
     echo "  Text output: data/raw/metasploitable_scan.txt"
     echo ""
@@ -52,6 +52,6 @@ if [ $? -eq 0 ]; then
     echo "2. Run: python scripts/create_baseline_from_metasploitable.py"
     echo "3. This will create the baseline file with known vulnerabilities"
 else
-    echo "✗ Scan failed"
+    echo " Scan failed"
     exit 1
 fi

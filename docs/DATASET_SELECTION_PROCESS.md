@@ -20,10 +20,10 @@ We needed a dataset with:
 
 We tested **4 public datasets** from our project plan:
 
-### 1. InfoSecWarrior/Vulnerable-Box-Resources ✅ SELECTED
+### 1. InfoSecWarrior/Vulnerable-Box-Resources  SELECTED
 - **Source:** https://github.com/InfoSecWarrior/Vulnerable-Box-Resources
 - **Content:** 822 nmap scans (274 XML + 548 text) across 11 targets
-- **Quality:** ⭐⭐⭐⭐⭐ Excellent
+- **Quality:**  Excellent
 - **Scan Date:** September 2024
 - **Verdict:** **SELECTED** - Best option with complete data
 
@@ -37,7 +37,7 @@ We tested **4 public datasets** from our project plan:
 ### 2. zephinzer/comat-ceh-report
 - **Source:** https://github.com/zephinzer/comat-ceh-report
 - **Content:** 1 Nessus scan (39 vulnerabilities)
-- **Quality:** ⭐⭐⭐ Fair
+- **Quality:**  Fair
 - **Verdict:** Not selected - No nmap scans, only Nessus output
 
 **Why Not Selected:**
@@ -48,7 +48,7 @@ We tested **4 public datasets** from our project plan:
 ### 3. DRT709/Metasploitable-ub1404-PenTest
 - **Source:** https://github.com/DRT709/Metasploitable-ub1404-PenTest
 - **Content:** PDF reports only
-- **Quality:** ⭐ Poor
+- **Quality:**  Poor
 - **Verdict:** Not selected - No machine-readable data
 
 **Why Not Selected:**
@@ -59,7 +59,7 @@ We tested **4 public datasets** from our project plan:
 ### 4. rahulkore1/basic-vulnerability-assessment
 - **Source:** https://github.com/rahulkore1/-basic-vulnerability-assessment
 - **Content:** PDFs and screenshots
-- **Quality:** ⭐ Poor
+- **Quality:**  Poor
 - **Verdict:** Not selected - No usable scan data
 
 **Why Not Selected:**
@@ -182,7 +182,7 @@ If you need a vulnerability scan dataset:
 **Primary Target:** My-File-Server-1  
 **Backup Targets:** 4 additional targets available  
 **Quality:** Excellent - Real, recent, complete data  
-**Status:** ✅ Validated and ready for use
+**Status:**  Validated and ready for use
 
 This dataset provides a solid foundation for our midterm demonstration and future 
 AI/ML enhancements.
