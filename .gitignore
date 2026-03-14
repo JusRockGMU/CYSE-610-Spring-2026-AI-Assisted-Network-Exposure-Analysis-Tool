@@ -46,6 +46,9 @@ data/reports/*
 # Datasets (external repos, too large for git)
 datasets/vulnerable-box-resources/
 
+# Archive (old/unused files)
+archive/
+
 # OS
 .DS_Store
 Thumbs.db
