@@ -1,4 +1,4 @@
-.PHONY: setup clean archive test run demo reset help
+.PHONY: setup clean archive test run batch demo reset help
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -11,8 +11,10 @@ help:
 	@echo "make clean    - Remove generated data and reset to fresh state"
 	@echo "make archive  - Move old versions to archive folder"
 	@echo "make test     - Run test suite"
-	@echo "make run      - Execute full pipeline (requires INPUT=path/to/scan.xml)"
+	@echo "make run      - Execute pipeline on single scan (requires INPUT=path/to/scan.xml)"
 	@echo "                Example: make run INPUT=data/raw/infosecwarrior_fileserver.xml ARGS='--baseline data/baseline/infosecwarrior_fileserver.json --evaluate'"
+	@echo "make batch    - Execute pipeline on all scans in a directory (requires DIR=path/to/directory)"
+	@echo "                Example: make batch DIR=datasets/vulnerable-box-resources/Infosecwarrior"
 	@echo "make demo     - Run demo with synthetic sample data"
 	@echo "make reset    - Complete fresh start (clean + setup)"
 	@echo "make help     - Show this help message"
@@ -57,6 +59,49 @@ run:
 	fi
 	@echo "Running pipeline on $(INPUT)..."
 	$(PYTHON) main.py --input $(INPUT) $(ARGS)
+
+batch:
+	@if [ -z "$(DIR)" ]; then \
+		echo "Error: DIR parameter required. Usage: make batch DIR=path/to/directory"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(DIR)" ]; then \
+		echo "Error: Directory not found: $(DIR)"; \
+		exit 1; \
+	fi
+	@echo "============================================================"
+	@echo "  BATCH PROCESSING: $(DIR)"
+	@echo "============================================================"
+	@echo ""
+	@count=0; \
+	total=$$(find "$(DIR)" -type d -mindepth 1 -maxdepth 1 | wc -l | tr -d ' '); \
+	echo "Found $$total targets to process"; \
+	echo ""; \
+	for target_dir in "$(DIR)"/*; do \
+		if [ -d "$$target_dir" ]; then \
+			target_name=$$(basename "$$target_dir"); \
+			scan_file=$$(find "$$target_dir" -name "*version-scan*.xml" -o -name "*.xml" | head -1); \
+			if [ -n "$$scan_file" ]; then \
+				count=$$((count + 1)); \
+				echo "[$$count/$$total] Processing: $$target_name"; \
+				echo "  Scan: $$(basename "$$scan_file")"; \
+				$(PYTHON) main.py --input "$$scan_file" $(ARGS); \
+				if [ $$? -eq 0 ]; then \
+					echo "  Status: SUCCESS"; \
+				else \
+					echo "  Status: FAILED"; \
+				fi; \
+				echo ""; \
+			else \
+				echo "  Skipping $$target_name: No XML scan found"; \
+				echo ""; \
+			fi; \
+		fi; \
+	done; \
+	echo "============================================================"; \
+	echo "  BATCH COMPLETE: Processed $$count/$$total targets"; \
+	echo "============================================================"; \
+	echo "Reports saved to: data/reports/"
 
 demo:
 	@echo "Running demo with synthetic sample data..."

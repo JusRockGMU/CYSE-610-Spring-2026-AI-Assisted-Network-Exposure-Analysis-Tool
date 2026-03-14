@@ -54,14 +54,19 @@ make setup
 
 ### 2. Run Analysis on Real Data
 
+**Single Scan:**
 ```bash
 # Analyze InfoSecWarrior File Server (real public dataset)
-python main.py --input data/raw/infosecwarrior_fileserver.xml \
-               --baseline data/baseline/infosecwarrior_fileserver.json \
-               --evaluate
+make run INPUT=data/raw/infosecwarrior_fileserver.xml ARGS='--baseline data/baseline/infosecwarrior_fileserver.json --evaluate'
 ```
 
-This analyzes a real nmap scan from the InfoSecWarrior/Vulnerable-Box-Resources dataset.
+**Batch Processing (All Scans in Directory):**
+```bash
+# Process all 11 InfoSecWarrior targets automatically
+make batch DIR=datasets/vulnerable-box-resources/Infosecwarrior
+```
+
+This analyzes real nmap scans from the InfoSecWarrior/Vulnerable-Box-Resources dataset.
 
 ### Analyze Your Own Scans
 
