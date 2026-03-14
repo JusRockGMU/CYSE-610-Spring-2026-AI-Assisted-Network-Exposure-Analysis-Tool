@@ -320,8 +320,17 @@ class ReportGenerator:
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        json_path = os.path.join(output_dir, f'vulnerability_report_{timestamp}.json')
-        html_path = os.path.join(output_dir, f'vulnerability_report_{timestamp}.html')
+        # Get host identifier for unique filename
+        host_id = 'unknown'
+        hosts = analysis_data.get('hosts', [])
+        if hosts:
+            first_host = hosts[0]
+            host_id = first_host.get('ip', 'unknown').replace('.', '_')
+            if not host_id or host_id == 'unknown':
+                host_id = first_host.get('hostname', 'unknown').replace('.', '_')
+        
+        json_path = os.path.join(output_dir, f'vulnerability_report_{host_id}_{timestamp}.json')
+        html_path = os.path.join(output_dir, f'vulnerability_report_{host_id}_{timestamp}.html')
         
         self._generate_json(analysis_data, json_path)
         self._generate_html(analysis_data, html_path)
