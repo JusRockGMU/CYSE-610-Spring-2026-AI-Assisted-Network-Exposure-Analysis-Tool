@@ -69,39 +69,8 @@ batch:
 		echo "Error: Directory not found: $(DIR)"; \
 		exit 1; \
 	fi
-	@echo "============================================================"
-	@echo "  BATCH PROCESSING: $(DIR)"
-	@echo "============================================================"
-	@echo ""
-	@count=0; \
-	total=$$(find "$(DIR)" -type d -mindepth 1 -maxdepth 1 | wc -l | tr -d ' '); \
-	echo "Found $$total targets to process"; \
-	echo ""; \
-	for target_dir in "$(DIR)"/*; do \
-		if [ -d "$$target_dir" ]; then \
-			target_name=$$(basename "$$target_dir"); \
-			scan_file=$$(find "$$target_dir" -name "*version-scan*.xml" -o -name "*.xml" | head -1); \
-			if [ -n "$$scan_file" ]; then \
-				count=$$((count + 1)); \
-				echo "[$$count/$$total] Processing: $$target_name"; \
-				echo "  Scan: $$(basename "$$scan_file")"; \
-				$(PYTHON) main.py --input "$$scan_file" $(ARGS); \
-				if [ $$? -eq 0 ]; then \
-					echo "  Status: SUCCESS"; \
-				else \
-					echo "  Status: FAILED"; \
-				fi; \
-				echo ""; \
-			else \
-				echo "  Skipping $$target_name: No XML scan found"; \
-				echo ""; \
-			fi; \
-		fi; \
-	done; \
-	echo "============================================================"; \
-	echo "  BATCH COMPLETE: Processed $$count/$$total targets"; \
-	echo "============================================================"; \
-	echo "Reports saved to: data/reports/"
+	@echo "Running batch processing with summary report generation..."
+	$(PYTHON) batch_process.py "$(DIR)" $(ARGS)
 
 demo:
 	@echo "Running demo with synthetic sample data..."
