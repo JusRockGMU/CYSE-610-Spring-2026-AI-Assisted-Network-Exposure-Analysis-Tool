@@ -11,7 +11,7 @@ A comprehensive vulnerability analysis tool that processes nmap scan data, ident
 -  **AI-Powered Analysis** - Optional Anthropic Claude integration for contextual insights
 -  **Professional Reports** - Generates JSON (machine-readable) and HTML (presentation-ready) reports
 -  **Evaluation Framework** - Compares results against baseline data with precision/recall metrics
-- ⚡ **Automated Workflow** - Comprehensive Makefile for easy setup and operation
+-  **Automated Workflow** - Comprehensive Makefile for easy setup and operation
 - **Real Public Dataset**: Uses InfoSecWarrior/Vulnerable-Box-Resources (822 scans, 11 targets)
 
 ## Dataset
