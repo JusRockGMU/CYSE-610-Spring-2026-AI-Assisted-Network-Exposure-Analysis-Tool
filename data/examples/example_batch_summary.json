@@ -1,0 +1,217 @@
+{
+  "generated_at": "2026-03-14T16:52:39.082212",
+  "summary": {
+    "total_hosts": 11,
+    "total_vulnerabilities": 29,
+    "critical_count": 10,
+    "high_count": 3,
+    "medium_count": 13,
+    "low_count": 3,
+    "hosts": [
+      {
+        "ip": "192.168.1.39",
+        "hostname": "fileserver.bbrouter",
+        "open_ports": 5,
+        "total_vulns": 5,
+        "critical": 3,
+        "high": 1,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 47.3
+      },
+      {
+        "ip": "192.168.1.103",
+        "hostname": "192.168.1.103",
+        "open_ports": 5,
+        "total_vulns": 5,
+        "critical": 3,
+        "high": 1,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 47.3
+      },
+      {
+        "ip": "192.168.29.61",
+        "hostname": "",
+        "open_ports": 5,
+        "total_vulns": 5,
+        "critical": 1,
+        "high": 1,
+        "medium": 2,
+        "low": 1,
+        "risk_score": 31.7
+      },
+      {
+        "ip": "192.168.1.11",
+        "hostname": "",
+        "open_ports": 3,
+        "total_vulns": 3,
+        "critical": 2,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 26.3
+      },
+      {
+        "ip": "192.168.1.205",
+        "hostname": "",
+        "open_ports": 4,
+        "total_vulns": 4,
+        "critical": 1,
+        "high": 0,
+        "medium": 2,
+        "low": 1,
+        "risk_score": 24.2
+      },
+      {
+        "ip": "192.168.29.30",
+        "hostname": "",
+        "open_ports": 2,
+        "total_vulns": 2,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 1,
+        "risk_score": 8.4
+      },
+      {
+        "ip": "192.168.1.206",
+        "hostname": "",
+        "open_ports": 1,
+        "total_vulns": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 5.3
+      },
+      {
+        "ip": "192.168.1.208",
+        "hostname": "",
+        "open_ports": 1,
+        "total_vulns": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 5.3
+      },
+      {
+        "ip": "192.168.1.203",
+        "hostname": "",
+        "open_ports": 1,
+        "total_vulns": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 5.3
+      },
+      {
+        "ip": "192.168.1.104",
+        "hostname": "",
+        "open_ports": 1,
+        "total_vulns": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 5.3
+      },
+      {
+        "ip": "192.168.1.13",
+        "hostname": "192.168.1.13",
+        "open_ports": 1,
+        "total_vulns": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "risk_score": 5.3
+      }
+    ],
+    "top_vulnerabilities": [
+      {
+        "description": "Unencrypted HTTP service detected",
+        "severity": "MEDIUM",
+        "cve": "CONFIG-001",
+        "count": 13,
+        "hosts": [
+          "192.168.1.205",
+          "192.168.1.206",
+          "192.168.1.11",
+          "192.168.29.30",
+          "192.168.1.39",
+          "192.168.1.103",
+          "192.168.1.208",
+          "192.168.1.203",
+          "192.168.29.61",
+          "192.168.1.104",
+          "192.168.1.13"
+        ]
+      },
+      {
+        "description": "MySQL authentication bypass vulnerability",
+        "severity": "CRITICAL",
+        "cve": "CVE-2012-2122",
+        "count": 4,
+        "hosts": [
+          "192.168.1.205",
+          "192.168.1.11",
+          "192.168.29.61"
+        ]
+      },
+      {
+        "description": "FTP service - vsftpd 2.3.4 backdoor or plaintext credentials",
+        "severity": "CRITICAL",
+        "cve": "CVE-2011-2523",
+        "count": 4,
+        "hosts": [
+          "192.168.1.39",
+          "192.168.1.103"
+        ]
+      },
+      {
+        "description": "Service version not detected - potential information disclosure issue",
+        "severity": "LOW",
+        "cve": "INFO-001",
+        "count": 3,
+        "hosts": [
+          "192.168.1.205",
+          "192.168.29.30",
+          "192.168.29.61"
+        ]
+      },
+      {
+        "description": "Samba username map script command execution",
+        "severity": "CRITICAL",
+        "cve": "CVE-2007-2447",
+        "count": 2,
+        "hosts": [
+          "192.168.1.39",
+          "192.168.1.103"
+        ]
+      },
+      {
+        "description": "NFS export misconfiguration allows unauthorized file access",
+        "severity": "HIGH",
+        "cve": "CVE-2004-0175",
+        "count": 2,
+        "hosts": [
+          "192.168.1.39",
+          "192.168.1.103"
+        ]
+      },
+      {
+        "description": "Apache Tomcat AJP Ghostcat vulnerability",
+        "severity": "HIGH",
+        "cve": "CVE-2020-1938",
+        "count": 1,
+        "hosts": [
+          "192.168.29.61"
+        ]
+      }
+    ],
+    "timestamp": "2026-03-14 16:52:39"
+  }
+}

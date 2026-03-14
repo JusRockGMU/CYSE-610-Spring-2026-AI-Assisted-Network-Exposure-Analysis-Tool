@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-03-14T16:52:39.034045",
+  "analysis": {
+    "metadata": {
+      "scan_time": "1727621322",
+      "scanner": "nmap",
+      "version": "7.94SVN"
+    },
+    "summary": {
+      "total_hosts": 1,
+      "total_vulnerabilities": 5,
+      "critical_count": 3,
+      "high_count": 1,
+      "medium_count": 1,
+      "low_count": 0
+    },
+    "hosts": [
+      {
+        "ip": "192.168.1.39",
+        "hostname": "fileserver.bbrouter",
+        "os": {
+          "name": "Linux 3.4 - 3.10",
+          "accuracy": 97
+        },
+        "vulnerabilities": [
+          {
+            "port": 21,
+            "service": "ftp",
+            "product": "vsftpd",
+            "version": "3.0.2",
+            "cve": "CVE-2011-2523",
+            "description": "FTP service - vsftpd 2.3.4 backdoor or plaintext credentials",
+            "severity": "CRITICAL",
+            "cvss": 10.0,
+            "recommendation": "Replace FTP with SFTP or FTPS, update vsftpd",
+            "category": "known_vulnerability"
+          },
+          {
+            "port": 445,
+            "service": "netbios-ssn",
+            "product": "Samba smbd",
+            "version": "4.9.1",
+            "cve": "CVE-2007-2447",
+            "description": "Samba username map script command execution",
+            "severity": "CRITICAL",
+            "cvss": 10.0,
+            "recommendation": "Update Samba to latest version",
+            "category": "known_vulnerability"
+          },
+          {
+            "port": 2121,
+            "service": "ftp",
+            "product": "ProFTPD",
+            "version": "1.3.5",
+            "cve": "CVE-2011-2523",
+            "description": "FTP service - vsftpd 2.3.4 backdoor or plaintext credentials",
+            "severity": "CRITICAL",
+            "cvss": 10.0,
+            "recommendation": "Replace FTP with SFTP or FTPS, update vsftpd",
+            "category": "known_vulnerability"
+          },
+          {
+            "port": 2049,
+            "service": "nfs_acl",
+            "product": "",
+            "version": "3",
+            "cve": "CVE-2004-0175",
+            "description": "NFS export misconfiguration allows unauthorized file access",
+            "severity": "HIGH",
+            "cvss": 7.5,
+            "recommendation": "Configure NFS exports properly, use NFSv4 with Kerberos",
+            "category": "known_vulnerability"
+          },
+          {
+            "port": 80,
+            "service": "http",
+            "product": "Apache httpd",
+            "version": "2.4.6",
+            "cve": "CONFIG-001",
+            "description": "Unencrypted HTTP service detected",
+            "severity": "MEDIUM",
+            "cvss": 5.3,
+            "recommendation": "Implement HTTPS with valid SSL/TLS certificate",
+            "category": "misconfiguration"
+          }
+        ],
+        "risk_score": 47.3
+      }
+    ]
+  }
+}

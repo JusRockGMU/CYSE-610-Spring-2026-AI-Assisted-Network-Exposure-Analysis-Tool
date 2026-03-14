@@ -43,6 +43,9 @@ data/reports/*
 !data/processed/.gitkeep
 !data/reports/.gitkeep
 
+# Examples (keep these for reference)
+!data/examples/
+
 # Datasets (external repos, too large for git)
 datasets/vulnerable-box-resources/
 
