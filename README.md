@@ -83,10 +83,13 @@ make run
 ### Cleanup
 
 ```bash
+# Stop running Flask application
+make stop-app
+
 # Remove virtual environment only (keeps data and .env)
 make clean-venv
 
-# Remove everything (venv, uploads, cache, .env)
+# Stop app and remove everything (venv, uploads, cache, .env)
 make clean-all
 ```
 
@@ -123,8 +126,23 @@ make clean   # Remove container and image
 
 1. **Open browser**: http://localhost:8080
 2. **Upload Nmap scans**: Drag & drop XML files or click to browse
+   - Use example scans from `example-datasets/` folder
+   - Or upload your own Nmap XML files
 3. **Enable AI** (optional): Check "Use AI for enhanced analysis"
 4. **View results**: See vulnerabilities, risk scores, and AI explanations
+
+---
+
+## Example Datasets
+
+The `example-datasets/` folder contains 10 ready-to-use Nmap scan files from 5 different vulnerable systems:
+- **Blue** - Windows with EternalBlue/SMB vulnerabilities
+- **Devel** - Windows IIS + FTP server
+- **Blocky** - Linux web services
+- **Delivery** - Linux multi-service system
+- **Admirer** - Linux web server
+
+Upload these files to immediately test the tool's functionality.
 
 ---
 
