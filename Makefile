@@ -1,4 +1,4 @@
-.PHONY: help build run stop clean clean-venv clean-all logs shell setup restart status env
+.PHONY: help build run stop stop-app clean clean-venv clean-all logs shell setup restart status env
 
 # Configuration
 IMAGE_NAME := network-analyzer
@@ -22,8 +22,9 @@ help: ## Show available commands
 	@echo "Then open: http://localhost:8080"
 	@echo ""
 	@echo "Cleanup:"
+	@echo "  make stop-app      - Stop running Flask application"
 	@echo "  make clean-venv    - Remove virtual environment only"
-	@echo "  make clean-all     - Remove venv, data, and all generated files"
+	@echo "  make clean-all     - Stop app and remove everything"
 	@echo ""
 	@echo "Docker Alternative:"
 	@echo "  Use 'make docker-build' and 'make docker-run' instead"
@@ -120,21 +121,28 @@ clean: ## Stop Docker container and remove image
 	@docker rmi $(IMAGE_NAME) 2>/dev/null || true
 	@echo "[OK] Docker cleanup complete!"
 
+stop-app: ## Stop running Flask application
+	@echo "Stopping Flask application on port 8080..."
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null && echo "[OK] Application stopped!" || echo "[INFO] No application running on port 8080"
+
 clean-venv: ## Remove virtual environment only
 	@echo "Removing virtual environment..."
 	@rm -rf $(VENV)
 	@echo "[OK] Virtual environment removed!"
 	@echo "[INFO] Run 'make build' to recreate"
 
-clean-all: ## Remove everything (venv, data, uploads, cache)
-	@echo "WARNING: This will remove:"
-	@echo "  - Virtual environment ($(VENV)/)"
-	@echo "  - Uploaded files (data/uploads/)"
-	@echo "  - Python cache (__pycache__/)"
-	@echo "  - .env file"
+clean-all: ## Remove everything (venv, data, uploads, cache) and stop app
+	@echo "WARNING: This will:"
+	@echo "  - Stop any running Flask application"
+	@echo "  - Remove virtual environment ($(VENV)/)"
+	@echo "  - Remove uploaded files (data/uploads/)"
+	@echo "  - Remove Python cache (__pycache__/)"
+	@echo "  - Remove .env file"
 	@read -p "Continue? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "Stopping Flask application..."; \
+		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
 		echo "Removing virtual environment..."; \
 		rm -rf $(VENV); \
 		echo "Removing data files..."; \
@@ -145,6 +153,7 @@ clean-all: ## Remove everything (venv, data, uploads, cache)
 		echo "Removing .env file..."; \
 		rm -f .env; \
 		echo "[OK] Complete cleanup finished!"; \
+		echo "[INFO] All processes stopped, all files removed"; \
 		echo "[INFO] Run 'make setup' to start fresh"; \
 	else \
 		echo "Cleanup cancelled"; \
