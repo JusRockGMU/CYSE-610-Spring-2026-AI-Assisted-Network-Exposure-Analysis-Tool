@@ -61,10 +61,11 @@ build: ## Create virtual environment and install dependencies
 		echo "[OK] Virtual environment created"; \
 	fi
 	@echo "Installing dependencies in virtual environment..."
-	@$(PIP) install --upgrade pip
-	@$(PIP) install -r requirements.txt
+	@$(VENV)/bin/pip3 install --upgrade pip
+	@$(VENV)/bin/pip3 install -r requirements.txt
 	@echo "[OK] Dependencies installed in isolated environment!"
 	@echo "[INFO] Virtual environment: $(VENV)/"
+	@echo "[INFO] Verify installation: $(VENV)/bin/python3 -m pip list"
 
 run: ## Run application with Python
 	@if [ ! -d "$(VENV)" ]; then \
@@ -80,7 +81,7 @@ run: ## Run application with Python
 	@echo "Starting application..."
 	@echo "[OK] Application running on http://localhost:8080"
 	@echo "Press Ctrl+C to stop"
-	@$(PYTHON) app.py
+	@$(VENV)/bin/python3 app.py
 
 docker-build: ## Build Docker image
 	@echo "Building Docker image..."
