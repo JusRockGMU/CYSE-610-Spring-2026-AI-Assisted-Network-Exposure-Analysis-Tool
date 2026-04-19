@@ -69,7 +69,7 @@ make setup
 # Step 2: Edit .env and add your ANTHROPIC_API_KEY
 make env
 
-# Step 3: Install dependencies
+# Step 3: Create virtual environment and install dependencies
 make build
 
 # Step 4: Run application
@@ -77,6 +77,18 @@ make run
 ```
 
 **Then open:** http://localhost:8080
+
+**Note:** Dependencies are installed in an isolated virtual environment (`venv/`) that doesn't affect your system Python.
+
+### Cleanup
+
+```bash
+# Remove virtual environment only (keeps data and .env)
+make clean-venv
+
+# Remove everything (venv, uploads, cache, .env)
+make clean-all
+```
 
 ---
 

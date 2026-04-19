@@ -1,9 +1,12 @@
-.PHONY: help build run stop clean logs shell setup restart status
+.PHONY: help build run stop clean clean-venv clean-all logs shell setup restart status env
 
-# Docker configuration
+# Configuration
 IMAGE_NAME := network-analyzer
 CONTAINER_NAME := network-analyzer-app
 PORT := 8080
+VENV := venv
+PYTHON := $(VENV)/bin/python3
+PIP := $(VENV)/bin/pip3
 
 .DEFAULT_GOAL := help
 
@@ -11,12 +14,16 @@ help: ## Show available commands
 	@echo "AI-Assisted Network Exposure Analysis"
 	@echo ""
 	@echo "Quick Start (4 Steps):"
-	@echo "  1. make setup   - Create .env file"
-	@echo "  2. make env     - Edit .env and add your ANTHROPIC_API_KEY"
-	@echo "  3. make build   - Install dependencies"
-	@echo "  4. make run     - Start application"
+	@echo "  1. make setup      - Create .env file"
+	@echo "  2. make env        - Edit .env and add your ANTHROPIC_API_KEY"
+	@echo "  3. make build      - Create venv and install dependencies"
+	@echo "  4. make run        - Start application"
 	@echo ""
 	@echo "Then open: http://localhost:8080"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean-venv    - Remove virtual environment only"
+	@echo "  make clean-all     - Remove venv, data, and all generated files"
 	@echo ""
 	@echo "Docker Alternative:"
 	@echo "  Use 'make docker-build' and 'make docker-run' instead"
@@ -47,12 +54,24 @@ env: ## Edit .env file to add API keys
 	@echo "Add your ANTHROPIC_API_KEY from: https://console.anthropic.com/"
 	@open -e .env || nano .env
 
-build: ## Install Python dependencies
-	@echo "Installing dependencies..."
-	pip3 install -r requirements.txt
-	@echo "[OK] Dependencies installed!"
+build: ## Create virtual environment and install dependencies
+	@if [ ! -d "$(VENV)" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv $(VENV); \
+		echo "[OK] Virtual environment created"; \
+	fi
+	@echo "Installing dependencies in virtual environment..."
+	@$(PIP) install --upgrade pip
+	@$(PIP) install -r requirements.txt
+	@echo "[OK] Dependencies installed in isolated environment!"
+	@echo "[INFO] Virtual environment: $(VENV)/"
 
 run: ## Run application with Python
+	@if [ ! -d "$(VENV)" ]; then \
+		echo "[ERROR] Virtual environment not found"; \
+		echo "Run 'make build' first"; \
+		exit 1; \
+	fi
 	@if [ ! -f .env ]; then \
 		echo "[ERROR] .env file not found"; \
 		echo "Run 'make setup' first"; \
@@ -61,7 +80,7 @@ run: ## Run application with Python
 	@echo "Starting application..."
 	@echo "[OK] Application running on http://localhost:8080"
 	@echo "Press Ctrl+C to stop"
-	python3 app.py
+	@$(PYTHON) app.py
 
 docker-build: ## Build Docker image
 	@echo "Building Docker image..."
@@ -94,11 +113,41 @@ stop: ## Stop and remove container
 	@docker rm $(CONTAINER_NAME) 2>/dev/null || true
 	@echo "[OK] Stopped!"
 
-clean: ## Stop container and remove image
-	@echo "Cleaning up..."
+clean: ## Stop Docker container and remove image
+	@echo "Cleaning up Docker..."
 	@make stop
 	@docker rmi $(IMAGE_NAME) 2>/dev/null || true
-	@echo "[OK] Cleanup complete!"
+	@echo "[OK] Docker cleanup complete!"
+
+clean-venv: ## Remove virtual environment only
+	@echo "Removing virtual environment..."
+	@rm -rf $(VENV)
+	@echo "[OK] Virtual environment removed!"
+	@echo "[INFO] Run 'make build' to recreate"
+
+clean-all: ## Remove everything (venv, data, uploads, cache)
+	@echo "WARNING: This will remove:"
+	@echo "  - Virtual environment ($(VENV)/)"
+	@echo "  - Uploaded files (data/uploads/)"
+	@echo "  - Python cache (__pycache__/)"
+	@echo "  - .env file"
+	@read -p "Continue? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "Removing virtual environment..."; \
+		rm -rf $(VENV); \
+		echo "Removing data files..."; \
+		rm -rf data/uploads/*; \
+		echo "Removing Python cache..."; \
+		find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true; \
+		find . -type f -name "*.pyc" -delete 2>/dev/null || true; \
+		echo "Removing .env file..."; \
+		rm -f .env; \
+		echo "[OK] Complete cleanup finished!"; \
+		echo "[INFO] Run 'make setup' to start fresh"; \
+	else \
+		echo "Cleanup cancelled"; \
+	fi
 
 logs: ## View application logs
 	@docker logs -f $(CONTAINER_NAME)
