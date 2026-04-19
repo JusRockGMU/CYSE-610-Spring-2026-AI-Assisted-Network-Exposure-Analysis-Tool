@@ -8,7 +8,7 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 
 ---
 
-## 🎯 Key Features
+## Key Features
 
 ### **Web Interface**
 - **Modern Flask Web App** - Upload scans, view results in browser
