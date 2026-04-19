@@ -11,33 +11,33 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 ## 🎯 Key Features
 
 ### **Web Interface**
-- 🌐 **Modern Flask Web App** - Upload scans, view results in browser
-- 📊 **Interactive Dashboard** - Summary cards, risk scores, vulnerability tables
-- 🔄 **Multi-Scan Support** - Upload multiple scans, aggregated results
-- 📱 **Responsive Design** - Works on desktop and mobile
+- **Modern Flask Web App** - Upload scans, view results in browser
+- **Interactive Dashboard** - Summary cards, risk scores, vulnerability tables
+- **Multi-Scan Support** - Upload multiple scans, aggregated results
+- **Responsive Design** - Works on desktop and mobile
 
 ### **Real-Time CVE Detection**
-- 🔍 **NVD API Integration** - Fetches actual CVE data from NIST National Vulnerability Database
-- ✅ **Auto-Updating** - CVE data updates automatically as NVD changes
-- 🎯 **Version-Specific** - Matches CVEs to detected product versions
-- 🚨 **CISA KEV Detection** - Flags actively exploited vulnerabilities
+- **NVD API Integration** - Fetches actual CVE data from NIST National Vulnerability Database
+- **Auto-Updating** - CVE data updates automatically as NVD changes
+- **Version-Specific** - Matches CVEs to detected product versions
+- **CISA KEV Detection** - Flags actively exploited vulnerabilities
 
 ### **Industry-Standard Risk Scoring**
-- 📈 **CVSS-Based** - Uses official CVSS v3.1 scores (0-100 scale)
-- ⚖️ **Weighted Average** - Diminishing returns for multiple vulnerabilities
-- 🎨 **Color-Coded** - Critical (red), High (orange), Medium (yellow), Low (green)
-- 📋 **Defensible** - Based on NIST, FIRST, and CISA standards
+- **CVSS-Based** - Uses official CVSS v3.1 scores (0-100 scale)
+- **Weighted Average** - Diminishing returns for multiple vulnerabilities
+- **Color-Coded** - Critical (red), High (orange), Medium (yellow), Low (green)
+- **Defensible** - Based on NIST, FIRST, and CISA standards
 
 ### **AI-Powered Analysis**
-- 🤖 **Anthropic Claude** - AI explains vulnerabilities in plain language
-- ✅ **Validation** - AI checks if CVEs actually apply to detected versions
-- 💬 **Q&A Interface** - Ask natural language questions about scan results
-- 🛠️ **Remediation Guidance** - AI provides actionable fix recommendations
+- **Anthropic Claude** - AI explains vulnerabilities in plain language
+- **Validation** - AI checks if CVEs actually apply to detected versions
+- **Q&A Interface** - Ask natural language questions about scan results
+- **Remediation Guidance** - AI provides actionable fix recommendations
 
 ### **Smart Prioritization**
-- 🎯 **Risk-Based Sorting** - Highest-risk hosts appear first
-- 🔢 **Host Grouping** - Groups multiple scans of same IP
-- 📊 **Severity Distribution** - See critical/high/medium/low counts at a glance
+- **Risk-Based Sorting** - Highest-risk hosts appear first
+- **Host Grouping** - Groups multiple scans of same IP
+- **Severity Distribution** - See critical/high/medium/low counts at a glance
 
 ---
 
