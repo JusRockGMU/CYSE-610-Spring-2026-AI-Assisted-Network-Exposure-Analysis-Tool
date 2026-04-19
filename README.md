@@ -41,7 +41,7 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - **[DESIGN_RATIONALE.md](DESIGN_RATIONALE.md)** - Why we made each design decision (for professor questions)
 - **[RISK_SCORING_METHODOLOGY.md](RISK_SCORING_METHODOLOGY.md)** - Detailed risk scoring algorithm explanation
@@ -51,7 +51,7 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -117,7 +117,7 @@ python app.py
 
 ---
 
-## 📊 Dataset
+## Dataset
 
 Uses **InfoSecWarrior/Vulnerable-Box-Resources** for testing:
 - **Source**: https://github.com/InfoSecWarrior/Vulnerable-Box-Resources
@@ -128,7 +128,7 @@ See `docs/DATASET_SELECTION_PROCESS.md` for selection process.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 User uploads Nmap scan(s)
@@ -148,7 +148,7 @@ User uploads Nmap scan(s)
 
 ---
 
-## 🎓 Academic Context
+## Academic Context
 
 **Course**: CYSE 610 - Network Security  
 **Objective**: Demonstrate practical vulnerability analysis with modern tools  
@@ -160,7 +160,7 @@ User uploads Nmap scan(s)
 
 ---
 
-## 📖 Key Files
+## Key Files
 
 - `app.py` - Flask web application
 - `src/analyzer.py` - Vulnerability detection with NVD integration
@@ -171,7 +171,7 @@ User uploads Nmap scan(s)
 
 ---
 
-## 🔧 Advanced Features
+## Advanced Features
 
 ### Optional: NVD API Key
 Get higher rate limits (50 req/30sec vs 5 req/30sec):
@@ -188,13 +188,13 @@ docker-compose up
 
 ---
 
-## 📝 License
+## License
 
 Academic project for CYSE 610. See course materials for usage guidelines.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **NIST NVD** - CVE data source
 - **CISA** - Known Exploited Vulnerabilities catalog
