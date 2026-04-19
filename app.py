@@ -31,6 +31,9 @@ app.config['ALLOWED_EXTENSIONS'] = {'xml', 'txt', 'nmap'}
 # In-memory storage for scan results (scan_id -> results)
 scan_results = {}
 
+# Progress tracking (scan_id -> progress_data)
+scan_progress = {}
+
 # Cleanup old scans after 1 hour
 SCAN_EXPIRY = timedelta(hours=1)
 
@@ -51,27 +54,37 @@ def cleanup_old_scans():
         del scan_results[scan_id]
 
 
-def process_scan_file(file_path, use_ai=False):
+def process_scan_file(file_path, use_ai=False, progress_callback=None):
     """Process a single scan file through the pipeline."""
+    def update_progress(step, percent):
+        if progress_callback:
+            progress_callback(step, percent)
+    
     parser = NmapParser()
     processor = DataProcessor()
     analyzer = VulnerabilityAnalyzer(use_ai=use_ai)
     reporter = ReportGenerator()
     
     # Parse
+    update_progress('Parsing scan file', 20)
     if file_path.endswith('.xml'):
         scan_data = parser.parse_xml(file_path)
     else:
         scan_data = parser.parse_text(file_path)
     
     # Process
+    update_progress('Processing scan data', 40)
     processed_data = processor.process(scan_data)
     
-    # Analyze
+    # Analyze (this is the slow part - NVD API calls)
+    update_progress('Fetching CVE data from NVD', 50)
     analysis_data = analyzer.analyze(processed_data)
     
     # Generate web-friendly JSON
+    update_progress('Generating results', 90)
     web_data = reporter.generate_web_json(analysis_data)
+    
+    update_progress('Complete', 100)
     
     return {
         'scan_data': scan_data,
@@ -110,18 +123,45 @@ def upload():
     scan_dir = os.path.join(app.config['UPLOAD_FOLDER'], scan_id)
     os.makedirs(scan_dir, exist_ok=True)
     
+    # Initialize progress tracking
+    scan_progress[scan_id] = {
+        'step': 'Uploading files',
+        'percent': 10,
+        'current_file': 0,
+        'total_files': len(files)
+    }
+    
     # Process uploaded files
     results = []
     errors = []
     
-    for file in files:
+    def update_file_progress(step, percent):
+        """Update progress for current file."""
+        file_idx = scan_progress[scan_id]['current_file']
+        total_files = scan_progress[scan_id]['total_files']
+        
+        # Calculate overall progress based on file progress
+        base_progress = (file_idx / total_files) * 80  # 0-80% for all files
+        file_progress = (percent / 100) * (80 / total_files)  # This file's contribution
+        overall_progress = 10 + base_progress + file_progress  # Start at 10%
+        
+        scan_progress[scan_id] = {
+            'step': f'{step} ({file_idx + 1}/{total_files})',
+            'percent': int(overall_progress),
+            'current_file': file_idx,
+            'total_files': total_files
+        }
+    
+    for idx, file in enumerate(files):
+        scan_progress[scan_id]['current_file'] = idx
+        
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(scan_dir, filename)
             file.save(file_path)
             
             try:
-                result = process_scan_file(file_path, use_ai=use_ai)
+                result = process_scan_file(file_path, use_ai=use_ai, progress_callback=update_file_progress)
                 results.append({
                     'filename': filename,
                     'data': result
@@ -138,6 +178,7 @@ def upload():
             })
     
     if not results:
+        scan_progress[scan_id] = {'step': 'Error', 'percent': 0}
         return jsonify({'error': 'No valid scans processed', 'details': errors}), 400
     
     # Store results
@@ -147,6 +188,8 @@ def upload():
         'errors': errors,
         'use_ai': use_ai
     }
+    
+    scan_progress[scan_id] = {'step': 'Complete', 'percent': 100}
     
     return jsonify({
         'scan_id': scan_id,
@@ -296,6 +339,14 @@ def download_report(scan_id, format):
         return send_file(report_paths['json'], as_attachment=True, download_name=f'vulnerability_report_{scan_id}.json')
     else:
         return send_file(report_paths['html'], as_attachment=True, download_name=f'vulnerability_report_{scan_id}.html')
+
+
+@app.route('/api/progress/<scan_id>')
+def get_progress(scan_id):
+    """Get current progress for a scan."""
+    if scan_id in scan_progress:
+        return jsonify(scan_progress[scan_id])
+    return jsonify({'step': 'Unknown', 'percent': 0})
 
 
 @app.route('/health')

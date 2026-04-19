@@ -144,50 +144,50 @@ uploadBtn.addEventListener('click', async () => {
 
     uploadBtn.disabled = true;
     progressSection.style.display = 'block';
-    progressFill.style.width = '10%';
-    progressText.textContent = 'Uploading files...';
-
-    // Animate progress bar during analysis
-    let currentProgress = 10;
-    const progressInterval = setInterval(() => {
-        if (currentProgress < 80) {
-            currentProgress += 1;
-            progressFill.style.width = currentProgress + '%';
-        }
-    }, 100); // Update every 100ms for smooth animation
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Starting upload...';
 
     try {
+        // Start upload
         const uploadPromise = fetch('/upload', {
             method: 'POST',
             body: formData
         });
 
-        // Switch to "Analyzing" after upload starts
-        setTimeout(() => {
-            progressText.textContent = 'Analyzing scans...';
-        }, 500);
-
+        // Get scan ID from response to poll progress
         const response = await uploadPromise;
         const result = await response.json();
 
-        // Stop the animation
-        clearInterval(progressInterval);
-
         if (response.ok) {
-            progressFill.style.width = '90%';
-            progressText.textContent = 'Finalizing results...';
+            // Poll for progress updates
+            const scanId = result.scan_id;
+            const progressInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch(`/api/progress/${scanId}`);
+                    const progressData = await progressResponse.json();
+                    
+                    progressFill.style.width = progressData.percent + '%';
+                    progressText.textContent = progressData.step;
+                    
+                    // If complete, redirect to results
+                    if (progressData.percent >= 100) {
+                        clearInterval(progressInterval);
+                        setTimeout(() => {
+                            window.location.href = `/results/${scanId}`;
+                        }, 500);
+                    }
+                } catch (err) {
+                    console.error('Progress poll error:', err);
+                }
+            }, 500); // Poll every 500ms
             
-            setTimeout(() => {
-                progressFill.style.width = '100%';
-                setTimeout(() => {
-                    window.location.href = `/results/${result.scan_id}`;
-                }, 300);
-            }, 200);
+            // Set initial progress
+            progressFill.style.width = '10%';
+            progressText.textContent = 'Processing scans...';
         } else {
             throw new Error(result.error || 'Upload failed');
         }
     } catch (error) {
-        clearInterval(progressInterval);
         alert('Error: ' + error.message);
         uploadBtn.disabled = false;
         progressSection.style.display = 'none';
