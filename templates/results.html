@@ -298,6 +298,10 @@ async function loadVulnerabilityDetails(hostIdx, vulnIdx) {
 function formatMarkdown(text) {
     // Convert markdown to HTML
     return text
+        // Headers: ## text -> <h4>text</h4>
+        .replace(/^### (.+)$/gm, '<h5>$1</h5>')
+        .replace(/^## (.+)$/gm, '<h4>$1</h4>')
+        .replace(/^# (.+)$/gm, '<h3>$1</h3>')
         // Bold: **text** -> <strong>text</strong>
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         // Italic: *text* -> <em>text</em>
