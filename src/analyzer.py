@@ -301,7 +301,7 @@ class VulnerabilityAnalyzer:
     def _check_known_vulnerabilities(self, service: str, product: str, version: str, port: int) -> Optional[Dict]:
         """Check for known vulnerabilities using NVD API or fallback to hardcoded rules."""
         
-        # Try NVD API first if enabled and we have product/version info
+        # Try NVD API first if enabled and product/version info is available
         if self.use_nvd and self.nvd_client and product and product != 'N/A':
             nvd_cves = self._lookup_nvd_cves(product, version)
             if nvd_cves:

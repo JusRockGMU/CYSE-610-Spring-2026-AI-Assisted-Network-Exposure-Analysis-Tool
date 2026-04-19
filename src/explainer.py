@@ -1,6 +1,6 @@
 """
-AI-powered vulnerability explainer module.
-Provides natural language explanations and Q&A capabilities.
+Vulnerability explanation module using language models.
+Provides natural language explanations and Q&A capabilities for scan results.
 """
 import os
 from typing import Dict, Optional
@@ -8,7 +8,7 @@ from anthropic import Anthropic
 
 
 class VulnerabilityExplainer:
-    """Generate AI-powered explanations for vulnerabilities."""
+    """Generate natural language explanations for vulnerabilities using Claude."""
     
     def __init__(self):
         """Initialize the explainer with Anthropic client."""

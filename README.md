@@ -1,8 +1,8 @@
-# AI-Assisted Network Exposure Analysis
+# Network Exposure Analysis Tool
 
-**Modern web-based vulnerability scanner with real-time CVE detection and AI-powered analysis**
+**Modern web-based vulnerability scanner with real-time CVE detection and intelligent analysis**
 
-A comprehensive vulnerability analysis tool that processes Nmap scan data, fetches real CVE information from NIST NVD, calculates industry-standard risk scores, and provides AI-powered explanations and remediation guidance.
+A comprehensive vulnerability analysis tool that processes Nmap scan data, fetches real CVE information from NIST NVD, calculates industry-standard risk scores, and provides intelligent explanations and remediation guidance.
 
 **CYSE 610 - Network Security Course Project**
 
@@ -28,11 +28,11 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 - **Color-Coded** - Critical (red), High (orange), Medium (yellow), Low (green)
 - **Defensible** - Based on NIST, FIRST, and CISA standards
 
-### **AI-Powered Analysis**
-- **Anthropic Claude** - AI explains vulnerabilities in plain language
-- **Validation** - AI checks if CVEs actually apply to detected versions
-- **Q&A Interface** - Ask natural language questions about scan results
-- **Remediation Guidance** - AI provides actionable fix recommendations
+### **Intelligent Analysis**
+- **Natural Language Explanations** - Vulnerabilities explained in plain language
+- **Automated Validation** - Checks if CVEs actually apply to detected versions
+- **Interactive Q&A** - Ask questions about scan results in natural language
+- **Remediation Guidance** - Actionable fix recommendations for each vulnerability
 
 ### **Smart Prioritization**
 - **Risk-Based Sorting** - Highest-risk hosts appear first
@@ -43,7 +43,7 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 
 ## Documentation
 
-- **[DESIGN_RATIONALE.md](DESIGN_RATIONALE.md)** - Why we made each design decision (for professor questions)
+- **[DESIGN_RATIONALE.md](DESIGN_RATIONALE.md)** - Design decisions and technical rationale
 - **[RISK_SCORING_METHODOLOGY.md](RISK_SCORING_METHODOLOGY.md)** - Detailed risk scoring algorithm explanation
 - **[NVD_INTEGRATION.md](NVD_INTEGRATION.md)** - How NVD API integration works
 - **[WEB_INTERFACE_README.md](WEB_INTERFACE_README.md)** - Web interface technical details

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Flask web application for AI-Assisted Network Exposure Analysis.
+Flask web application for Network Exposure Analysis.
 Provides web interface for uploading Nmap scans and viewing results.
 """
 import os
