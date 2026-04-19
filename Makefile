@@ -10,12 +10,15 @@ PORT := 8080
 help: ## Show available commands
 	@echo "AI-Assisted Network Exposure Analysis"
 	@echo ""
-	@echo "Quick Start:"
+	@echo "Quick Start (Python):"
 	@echo "  1. make setup"
 	@echo "  2. Edit .env and add your ANTHROPIC_API_KEY"
 	@echo "  3. make build"
 	@echo "  4. make run"
 	@echo "  5. Open http://localhost:8080"
+	@echo ""
+	@echo "Docker Alternative:"
+	@echo "  Use 'make docker-build' and 'make docker-run' instead"
 	@echo ""
 	@echo "Commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -36,12 +39,28 @@ setup: ## Initial setup - copy .env.example and show instructions
 		echo "[OK] .env file already exists"; \
 	fi
 
-build: ## Build Docker image
+build: ## Install Python dependencies
+	@echo "Installing dependencies..."
+	pip3 install -r requirements.txt
+	@echo "[OK] Dependencies installed!"
+
+run: ## Run application with Python
+	@if [ ! -f .env ]; then \
+		echo "[ERROR] .env file not found"; \
+		echo "Run 'make setup' first"; \
+		exit 1; \
+	fi
+	@echo "Starting application..."
+	@echo "[OK] Application running on http://localhost:8080"
+	@echo "Press Ctrl+C to stop"
+	python3 app.py
+
+docker-build: ## Build Docker image
 	@echo "Building Docker image..."
 	docker build -t $(IMAGE_NAME) .
 	@echo "[OK] Build complete!"
 
-run: ## Run application in Docker container
+docker-run: ## Run application in Docker container
 	@if [ ! -f .env ]; then \
 		echo "[ERROR] .env file not found"; \
 		echo "Run 'make setup' first"; \
