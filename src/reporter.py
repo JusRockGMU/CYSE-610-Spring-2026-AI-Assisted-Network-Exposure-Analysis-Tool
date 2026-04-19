@@ -341,6 +341,26 @@ class ReportGenerator:
             'timestamp': timestamp
         }
     
+    def generate_web_json(self, analysis_data: Dict) -> Dict:
+        """
+        Generate web-friendly JSON data (returns dict instead of writing file).
+        
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            Dictionary with web-optimized data
+        """
+        return {
+            'summary': analysis_data.get('summary', {}),
+            'hosts': analysis_data.get('hosts', []),
+            'metadata': {
+                'generated_at': datetime.now().isoformat(),
+                'total_hosts': len(analysis_data.get('hosts', [])),
+                'tool_version': '1.0.0'
+            }
+        }
+    
     def _generate_json(self, analysis_data: Dict, output_path: str):
         """Generate JSON report."""
         report = {

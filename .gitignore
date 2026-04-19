@@ -24,6 +24,7 @@ wheels/
 venv/
 env/
 ENV/
+.venv/
 
 # Environment Variables
 .env
@@ -45,6 +46,9 @@ data/reports/*
 
 # Examples (keep these for reference)
 !data/examples/
+
+# Project extras (documentation, datasets, testing, etc.)
+project-extras/
 
 # Datasets (external repos, too large for git)
 datasets/vulnerable-box-resources/

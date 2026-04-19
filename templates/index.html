@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Scans - Network Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="upload-section">
+        <h2>Upload Nmap Scan Files</h2>
+        <p class="subtitle">Upload one or multiple Nmap scan files (XML or text format) for vulnerability analysis</p>
+
+        <div class="upload-box" id="uploadBox">
+            <div class="upload-icon">📁</div>
+            <p class="upload-text">Drag and drop files here or click to browse</p>
+            <p class="upload-hint">Supported formats: .xml, .txt, .nmap</p>
+            <input type="file" id="fileInput" multiple accept=".xml,.txt,.nmap" style="display: none;">
+        </div>
+
+        <div class="file-list" id="fileList"></div>
+
+        <div class="options">
+            <label class="checkbox-label">
+                <input type="checkbox" id="useAI" checked>
+                <span>Enable AI-powered analysis (recommended)</span>
+            </label>
+        </div>
+
+        <button class="btn btn-primary" id="uploadBtn" disabled>
+            Analyze Scans
+        </button>
+
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">Processing scans...</p>
+        </div>
+    </div>
+
+    <div class="features">
+        <h3>Features</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h4>Comprehensive Analysis</h4>
+                <p>Rule-based vulnerability detection with CVE mapping</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h4>AI-Powered Insights</h4>
+                <p>Contextual analysis and remediation guidance</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h4>Interactive Reports</h4>
+                <p>Expandable vulnerability details with explanations</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <h4>Export Options</h4>
+                <p>Download reports in JSON or HTML format</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const uploadBox = document.getElementById('uploadBox');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const uploadBtn = document.getElementById('uploadBtn');
+const progressSection = document.getElementById('progressSection');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+let selectedFiles = [];
+
+// Click to browse
+uploadBox.addEventListener('click', () => fileInput.click());
+
+// Drag and drop
+uploadBox.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadBox.classList.add('drag-over');
+});
+
+uploadBox.addEventListener('dragleave', () => {
+    uploadBox.classList.remove('drag-over');
+});
+
+uploadBox.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadBox.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+});
+
+// File input change
+fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+function handleFiles(files) {
+    selectedFiles = Array.from(files);
+    displayFiles();
+    uploadBtn.disabled = selectedFiles.length === 0;
+}
+
+function displayFiles() {
+    fileList.innerHTML = '';
+    selectedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+            <span class="file-name">📄 ${file.name}</span>
+            <span class="file-size">${formatFileSize(file.size)}</span>
+            <button class="btn-remove" onclick="removeFile(${index})">✕</button>
+        `;
+        fileList.appendChild(fileItem);
+    });
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    displayFiles();
+    uploadBtn.disabled = selectedFiles.length === 0;
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Upload button
+uploadBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+
+    const formData = new FormData();
+    selectedFiles.forEach(file => {
+        formData.append('files[]', file);
+    });
+    formData.append('use_ai', document.getElementById('useAI').checked);
+
+    uploadBtn.disabled = true;
+    progressSection.style.display = 'block';
+    progressFill.style.width = '10%';
+    progressText.textContent = 'Uploading files...';
+
+    // Animate progress bar during analysis
+    let currentProgress = 10;
+    const progressInterval = setInterval(() => {
+        if (currentProgress < 80) {
+            currentProgress += 1;
+            progressFill.style.width = currentProgress + '%';
+        }
+    }, 100); // Update every 100ms for smooth animation
+
+    try {
+        const uploadPromise = fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        // Switch to "Analyzing" after upload starts
+        setTimeout(() => {
+            progressText.textContent = 'Analyzing scans...';
+        }, 500);
+
+        const response = await uploadPromise;
+        const result = await response.json();
+
+        // Stop the animation
+        clearInterval(progressInterval);
+
+        if (response.ok) {
+            progressFill.style.width = '90%';
+            progressText.textContent = 'Finalizing results...';
+            
+            setTimeout(() => {
+                progressFill.style.width = '100%';
+                setTimeout(() => {
+                    window.location.href = `/results/${result.scan_id}`;
+                }, 300);
+            }, 200);
+        } else {
+            throw new Error(result.error || 'Upload failed');
+        }
+    } catch (error) {
+        clearInterval(progressInterval);
+        alert('Error: ' + error.message);
+        uploadBtn.disabled = false;
+        progressSection.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

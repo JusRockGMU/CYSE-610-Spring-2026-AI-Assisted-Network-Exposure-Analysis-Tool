@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Error - Network Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="error-page">
+        <div class="error-icon">⚠️</div>
+        <h2>Oops! Something went wrong</h2>
+        <p class="error-message">{{ message }}</p>
+        <button class="btn btn-primary" onclick="window.location.href='/'">
+            Return to Home
+        </button>
+    </div>
+</div>
+
+<style>
+.error-page {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    max-width: 600px;
+    margin: 2rem auto;
+}
+
+.error-icon {
+    font-size: 5rem;
+    margin-bottom: 1rem;
+}
+
+.error-page h2 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    color: #7f8c8d;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+</style>
+{% endblock %}

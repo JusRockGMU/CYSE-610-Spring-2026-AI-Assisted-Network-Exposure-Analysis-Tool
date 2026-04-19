@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Results - Network Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="results-header">
+        <h2>Vulnerability Analysis Results</h2>
+        <div class="results-actions">
+            <button class="btn btn-secondary" onclick="window.location.href='/'">New Scan</button>
+            <button class="btn btn-secondary" onclick="downloadReport('json')">Download JSON</button>
+            <button class="btn btn-secondary" onclick="downloadReport('html')">Download HTML</button>
+        </div>
+    </div>
+
+    {# Aggregate data from all scans #}
+    {% set ns = namespace(all_hosts=[], total_vulns=0, critical=0, high=0, medium=0, low=0, host_groups={}) %}
+    
+    {% for result in data.results %}
+        {% set analysis = result.data.analysis_data %}
+        {% set ns.all_hosts = ns.all_hosts + analysis.hosts %}
+        {% set ns.total_vulns = ns.total_vulns + analysis.summary.total_vulnerabilities %}
+        {% set ns.critical = ns.critical + analysis.summary.critical_count %}
+        {% set ns.high = ns.high + analysis.summary.high_count %}
+        {% set ns.medium = ns.medium + analysis.summary.medium_count %}
+        {% set ns.low = ns.low + analysis.summary.low_count %}
+    {% endfor %}
+    
+    {# Group hosts by IP and calculate CVSS-based risk scores (0-100) #}
+    {% for host in ns.all_hosts %}
+        {% set ip = host.ip %}
+        {% set cvss_calc = namespace(
+            total_weighted=0.0,
+            total_weight=0.0,
+            max_cvss=0.0,
+            kev_count=0,
+            vuln_count=0
+        ) %}
+        
+        {# Calculate weighted CVSS average with diminishing returns #}
+        {% for vuln in host.vulnerabilities %}
+            {% set cvss_calc.vuln_count = cvss_calc.vuln_count + 1 %}
+            {% set cvss_score = vuln.cvss | float %}
+            
+            {# Track maximum CVSS score #}
+            {% if cvss_score > cvss_calc.max_cvss %}
+                {% set cvss_calc.max_cvss = cvss_score %}
+            {% endif %}
+            
+            {# Weighted average with diminishing returns (1/sqrt(n)) #}
+            {% set weight = 1.0 / ((cvss_calc.vuln_count | float) ** 0.5) %}
+            {% set cvss_calc.total_weighted = cvss_calc.total_weighted + (cvss_score * weight) %}
+            {% set cvss_calc.total_weight = cvss_calc.total_weight + weight %}
+            
+            {# Count KEV vulnerabilities #}
+            {% if vuln.in_kev %}
+                {% set cvss_calc.kev_count = cvss_calc.kev_count + 1 %}
+            {% endif %}
+        {% endfor %}
+        
+        {# Calculate CVSS-based risk score (0-100) #}
+        {% if cvss_calc.total_weight > 0 %}
+            {# Weighted average CVSS (0-10 scale) #}
+            {% set weighted_avg = cvss_calc.total_weighted / cvss_calc.total_weight %}
+            
+            {# Convert to 0-100 scale #}
+            {% set base_score = weighted_avg * 10 %}
+            
+            {# KEV bonus: +5 points per actively exploited vulnerability #}
+            {% set kev_bonus = cvss_calc.kev_count * 5 %}
+            
+            {# Final score capped at 100 #}
+            {% set risk_score = ([base_score + kev_bonus, 100] | min) | int %}
+        {% else %}
+            {% set risk_score = 0 %}
+        {% endif %}
+        
+        {% if ip in ns.host_groups %}
+            {% set existing = ns.host_groups[ip] %}
+            {% set _ = existing.hosts.append(host) %}
+            {# Take max risk score for grouped IPs #}
+            {% if risk_score > existing.risk_score %}
+                {% set _ = existing.update({'risk_score': risk_score}) %}
+            {% endif %}
+        {% else %}
+            {% set _ = ns.host_groups.update({ip: {'hosts': [host], 'risk_score': risk_score, 'ip': ip}}) %}
+        {% endif %}
+    {% endfor %}
+    
+    {# Sort host groups by risk score (highest first) #}
+    {% set sorted_groups = ns.host_groups.values() | sort(attribute='risk_score', reverse=True) %}
+
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="card-label">Detected Hosts</div>
+            <div class="card-value">{{ ns.all_hosts|length }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="card-label">Total Vulns</div>
+            <div class="card-value">{{ ns.total_vulns }}</div>
+        </div>
+        <div class="summary-card critical">
+            <div class="card-label">Critical</div>
+            <div class="card-value">{{ ns.critical }}</div>
+        </div>
+        <div class="summary-card high">
+            <div class="card-label">High</div>
+            <div class="card-value">{{ ns.high }}</div>
+        </div>
+        <div class="summary-card medium">
+            <div class="card-label">Medium</div>
+            <div class="card-value">{{ ns.medium }}</div>
+        </div>
+        <div class="summary-card low">
+            <div class="card-label">Low</div>
+            <div class="card-value">{{ ns.low }}</div>
+        </div>
+    </div>
+
+    {% if data.use_ai %}
+    <div class="ai-qa-section">
+        <h3>Ask Questions About This Scan</h3>
+        <div class="qa-box">
+            <input type="text" id="questionInput" placeholder="e.g., What's the most critical vulnerability?" class="qa-input">
+            <button class="btn btn-primary" onclick="askQuestion()">Ask AI</button>
+        </div>
+        <div id="qaResponse" class="qa-response" style="display: none;"></div>
+    </div>
+    {% endif %}
+
+    <div class="hosts-section">
+        <h3>Detected Hosts ({{ sorted_groups|length }} unique IPs, sorted by risk)</h3>
+        {% for group in sorted_groups %}
+            {% for host in group.hosts %}
+        <div class="host-card">
+            <div class="host-header">
+                <div class="host-info">
+                    <h4>{{ host.ip }}</h4>
+                    {% if host.hostname %}
+                    <span class="host-name">{{ host.hostname }}</span>
+                    {% endif %}
+                    {% if host.os and host.os.name %}
+                    <span class="host-os">{{ host.os.name }}</span>
+                    {% endif %}
+                </div>
+                <div class="host-risk">
+                    <span class="risk-label">Risk Score:</span>
+                    <span class="risk-score {% if group.risk_score >= 70 %}critical{% elif group.risk_score >= 50 %}high{% elif group.risk_score >= 30 %}medium{% else %}low{% endif %}">{{ group.risk_score }}</span>
+                </div>
+            </div>
+
+            <div class="vulnerabilities-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>CVE</th>
+                            <th>Description</th>
+                            <th>Port</th>
+                            <th>CVSS</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set host_idx = loop.index0 %}
+                        {% for vuln in host.vulnerabilities %}
+                        {% set vuln_idx = loop.index0 %}
+                        <tr class="vuln-row" data-host-idx="{{ host_idx }}" data-vuln-idx="{{ vuln_idx }}">
+                            <td>
+                                <span class="severity-badge {{ vuln.severity|lower }}">
+                                    {{ vuln.severity }}
+                                </span>
+                            </td>
+                            <td class="cve-cell">{{ vuln.cve }}</td>
+                            <td class="desc-cell">{{ vuln.description }}</td>
+                            <td>{{ vuln.port }}</td>
+                            <td class="cvss-cell">{{ vuln.cvss }}</td>
+                            <td>
+                                <button class="btn-expand" onclick="toggleDetails(this, {{ host_idx }}, {{ vuln_idx }})">
+                                    Details ▼
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="vuln-details" id="details-{{ host_idx }}-{{ vuln_idx }}" style="display: none;">
+                            <td colspan="6">
+                                <div class="details-content">
+                                    <div class="loading">Loading details...</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const scanId = '{{ scan_id }}';
+const useAI = {{ 'true' if data.use_ai else 'false' }};
+
+function toggleDetails(btn, hostIdx, vulnIdx) {
+    const detailsRow = document.getElementById(`details-${hostIdx}-${vulnIdx}`);
+    const isVisible = detailsRow.style.display !== 'none';
+
+    if (isVisible) {
+        detailsRow.style.display = 'none';
+        btn.textContent = 'Details ▼';
+    } else {
+        detailsRow.style.display = 'table-row';
+        btn.textContent = 'Details ▲';
+        loadVulnerabilityDetails(hostIdx, vulnIdx);
+    }
+}
+
+async function loadVulnerabilityDetails(hostIdx, vulnIdx) {
+    const detailsRow = document.getElementById(`details-${hostIdx}-${vulnIdx}`);
+    const contentDiv = detailsRow.querySelector('.details-content');
+
+    try {
+        const response = await fetch(`/api/vulnerability/${scanId}/${hostIdx}/${vulnIdx}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            let html = '';
+            
+            // AI Explanation as primary content
+            if (data.explanation) {
+                html += `
+                    <div class="vuln-detail-section ai-explanation-primary">
+                        <div class="explanation-content">${formatMarkdown(data.explanation)}</div>
+                    </div>
+                `;
+            } else {
+                // Fallback if no AI explanation
+                html += `
+                    <div class="vuln-detail-section">
+                        <h4>Vulnerability Information</h4>
+                        <p><strong>Description:</strong> ${data.vulnerability.description}</p>
+                        <p><strong>Recommendation:</strong> ${data.vulnerability.recommendation}</p>
+                    </div>
+                `;
+            }
+            
+            // Technical details in collapsible section
+            html += `
+                <div class="vuln-detail-section technical-details">
+                    <button class="btn-secondary" onclick="toggleTechnicalDetails(${hostIdx}, ${vulnIdx})" style="margin-top: 1rem;">
+                        📋 Show Technical Details
+                    </button>
+                    <div id="tech-details-${hostIdx}-${vulnIdx}" style="display: none; margin-top: 1rem;">
+                        <h4>Technical Information</h4>
+                        <p><strong>CVE:</strong> ${data.vulnerability.cve}</p>
+                        <p><strong>CVSS Score:</strong> ${data.vulnerability.cvss}</p>
+                        <p><strong>Service:</strong> ${data.vulnerability.service}</p>
+                        <p><strong>Port:</strong> ${data.vulnerability.port}</p>
+            `;
+            
+            if (data.vulnerability.product && data.vulnerability.product !== 'N/A') {
+                html += `<p><strong>Product:</strong> ${data.vulnerability.product}</p>`;
+            }
+            if (data.vulnerability.version && data.vulnerability.version !== 'N/A') {
+                html += `<p><strong>Version:</strong> ${data.vulnerability.version}</p>`;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            // AI Chat button
+            if (useAI) {
+                html += `
+                    <div class="vuln-detail-section" style="margin-top: 1.5rem;">
+                        <button class="btn btn-primary" onclick="getAIRemediation(${hostIdx}, ${vulnIdx})" id="ai-btn-${hostIdx}-${vulnIdx}">
+                            💬 Chat with AI About This Vulnerability
+                        </button>
+                    </div>
+                `;
+            }
+            
+            html += `<div id="ai-remediation-${hostIdx}-${vulnIdx}" class="ai-remediation" style="display: none;"></div>`;
+
+            contentDiv.innerHTML = html;
+        } else {
+            contentDiv.innerHTML = '<div class="error">Failed to load details</div>';
+        }
+    } catch (error) {
+        contentDiv.innerHTML = '<div class="error">Error loading details</div>';
+    }
+}
+
+function formatMarkdown(text) {
+    // Convert markdown to HTML
+    return text
+        // Bold: **text** -> <strong>text</strong>
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic: *text* -> <em>text</em>
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Code: `text` -> <code>text</code>
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+}
+
+function toggleTechnicalDetails(hostIdx, vulnIdx) {
+    const detailsDiv = document.getElementById(`tech-details-${hostIdx}-${vulnIdx}`);
+    const button = event.target;
+    
+    if (detailsDiv.style.display === 'none') {
+        detailsDiv.style.display = 'block';
+        button.textContent = '📋 Hide Technical Details';
+    } else {
+        detailsDiv.style.display = 'none';
+        button.textContent = '📋 Show Technical Details';
+    }
+}
+
+async function getAIRemediation(hostIdx, vulnIdx) {
+    const remediationDiv = document.getElementById(`ai-remediation-${hostIdx}-${vulnIdx}`);
+    const button = document.getElementById(`ai-btn-${hostIdx}-${vulnIdx}`);
+    
+    button.disabled = true;
+    button.textContent = '💬 Loading...';
+    
+    remediationDiv.style.display = 'block';
+    remediationDiv.innerHTML = '<div class="loading">AI is analyzing and preparing detailed remediation steps...</div>';
+    
+    try {
+        const response = await fetch(`/api/remediation/${scanId}/${hostIdx}/${vulnIdx}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            remediationDiv.innerHTML = `
+                <div class="vuln-detail-section ai-chat-response">
+                    <h4>💬 AI Remediation Assistant</h4>
+                    <div class="chat-message ai-message">
+                        <div class="message-content">${formatMarkdown(data.guidance)}</div>
+                    </div>
+                    <div class="chat-input-area" style="margin-top: 1rem;">
+                        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                            <em>Have follow-up questions? Use the Q&A section at the top of the page.</em>
+                        </p>
+                    </div>
+                </div>
+            `;
+            button.style.display = 'none';
+        } else {
+            remediationDiv.innerHTML = `<div class="error">${data.error}</div>`;
+            button.disabled = false;
+            button.textContent = '💬 Chat with AI About This Vulnerability';
+        }
+    } catch (error) {
+        remediationDiv.innerHTML = '<div class="error">Failed to get AI guidance</div>';
+        button.disabled = false;
+        button.textContent = '💬 Chat with AI About This Vulnerability';
+    }
+}
+
+async function askQuestion() {
+    const input = document.getElementById('questionInput');
+    const responseDiv = document.getElementById('qaResponse');
+    const question = input.value.trim();
+
+    if (!question) return;
+
+    responseDiv.style.display = 'block';
+    responseDiv.innerHTML = '<div class="loading">Thinking...</div>';
+
+    try {
+        const response = await fetch(`/api/ask/${scanId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            responseDiv.innerHTML = `
+                <div class="qa-question"><strong>Q:</strong> ${data.question}</div>
+                <div class="qa-answer"><strong>A:</strong> ${data.answer}</div>
+            `;
+        } else {
+            responseDiv.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+    } catch (error) {
+        responseDiv.innerHTML = '<div class="error">Failed to get answer</div>';
+    }
+}
+
+function downloadReport(format) {
+    window.location.href = `/download/${scanId}/${format}`;
+}
+
+// Allow Enter key to submit question
+document.getElementById('questionInput')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        askQuestion();
+    }
+});
+</script>
+{% endblock %}

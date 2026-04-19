@@ -2,6 +2,7 @@ import os
 import json
 from typing import Dict, List, Optional
 from anthropic import Anthropic
+from .nvd_client import NVDClient
 
 
 class VulnerabilityAnalyzer:
@@ -172,17 +173,25 @@ class VulnerabilityAnalyzer:
         }
     }
     
-    def __init__(self, use_ai: bool = False):
+    def __init__(self, use_ai: bool = False, use_nvd: bool = True):
+        """Initialize the analyzer with optional AI and NVD support."""
         self.use_ai = use_ai
+        self.use_nvd = use_nvd
         self.anthropic_client = None
+        self.nvd_client = None
         
         if use_ai:
             api_key = os.getenv('ANTHROPIC_API_KEY')
             if api_key:
                 self.anthropic_client = Anthropic(api_key=api_key)
             else:
-                print("Warning: ANTHROPIC_API_KEY not set. AI analysis disabled.")
-                self.use_ai = False
+                print("Warning: ANTHROPIC_API_KEY not found. AI features disabled.")
+        
+        if use_nvd:
+            # Initialize NVD client (can optionally use NVD_API_KEY env var for higher rate limits)
+            nvd_api_key = os.getenv('NVD_API_KEY')
+            self.nvd_client = NVDClient(api_key=nvd_api_key)
+            print("NVD API integration enabled for real-time CVE lookups")
     
     def analyze(self, processed_data: Dict) -> Dict:
         """
@@ -247,6 +256,19 @@ class VulnerabilityAnalyzer:
             vulns = self._analyze_service(service, host.get('ip', ''))
             host_analysis['vulnerabilities'].extend(vulns)
         
+        # Generate AI explanations for each vulnerability if AI is enabled
+        if self.use_ai and self.anthropic_client:
+            from .explainer import VulnerabilityExplainer
+            explainer = VulnerabilityExplainer()
+            
+            for vuln in host_analysis['vulnerabilities']:
+                try:
+                    explanation = explainer.explain_vulnerability(vuln, host_analysis)
+                    vuln['ai_explanation'] = explanation
+                except Exception as e:
+                    print(f"Failed to generate AI explanation: {e}")
+                    vuln['ai_explanation'] = None
+        
         host_analysis['risk_score'] = self._calculate_risk_score(host_analysis['vulnerabilities'])
         
         host_analysis['vulnerabilities'] = sorted(
@@ -277,59 +299,104 @@ class VulnerabilityAnalyzer:
         return vulnerabilities
     
     def _check_known_vulnerabilities(self, service: str, product: str, version: str, port: int) -> Optional[Dict]:
-        """Check for known vulnerabilities based on service/product/version."""
-        service_key = None
+        """Check for known vulnerabilities using NVD API or fallback to hardcoded rules."""
         
-        # Direct service name match
-        if service in self.VULNERABILITY_DATABASE:
-            service_key = service
-        # Check for partial matches
-        else:
-            for db_service in self.VULNERABILITY_DATABASE.keys():
-                if db_service in service or service in db_service:
-                    service_key = db_service
-                    break
+        # Try NVD API first if enabled and we have product/version info
+        if self.use_nvd and self.nvd_client and product and product != 'N/A':
+            nvd_cves = self._lookup_nvd_cves(product, version)
+            if nvd_cves:
+                # Return the highest severity CVE
+                return self._format_nvd_vulnerability(nvd_cves[0], service, product, version, port)
         
-        # Port-based fallback for common services
-        if not service_key:
-            port_service_map = {
-                21: 'ftp',
-                23: 'telnet',
-                139: 'netbios-ssn',
-                445: 'microsoft-ds',
-                512: 'exec',
-                513: 'login',
-                514: 'shell',
-                1099: 'java-rmi',
-                1524: 'bindshell',
-                2049: 'nfs',
-                3306: 'mysql',
-                3389: 'rdp',
-                5432: 'postgresql',
-                5900: 'vnc',
-                6000: 'x11',
-                6667: 'irc',
-                8009: 'ajp13'
-            }
-            service_key = port_service_map.get(port)
+        # Fallback to hardcoded database for common misconfigurations
+        # These are protocol-level issues that don't depend on specific versions
+        service_key = self._get_service_key(service, port)
         
         if service_key and service_key in self.VULNERABILITY_DATABASE:
-            vuln_template = self.VULNERABILITY_DATABASE[service_key]['default']
-            
+            vuln_data = self.VULNERABILITY_DATABASE[service_key]['default']
             return {
                 'port': port,
                 'service': service,
-                'product': product,
-                'version': version,
-                'cve': vuln_template['cve'],
-                'description': vuln_template['description'],
-                'severity': vuln_template['severity'],
-                'cvss': vuln_template['cvss'],
-                'recommendation': vuln_template['recommendation'],
-                'category': 'known_vulnerability'
+                'product': product if product else 'N/A',
+                'version': version if version else 'N/A',
+                'cve': vuln_data['cve'],
+                'description': vuln_data['description'],
+                'severity': vuln_data['severity'],
+                'cvss': vuln_data['cvss'],
+                'recommendation': vuln_data['recommendation'],
+                'source': 'hardcoded'  # Mark source for AI validation
             }
         
         return None
+    
+    def _get_service_key(self, service: str, port: int) -> Optional[str]:
+        """Get service key for hardcoded database lookup."""
+        # Direct service name match
+        if service in self.VULNERABILITY_DATABASE:
+            return service
+        
+        # Check for partial matches
+        for db_service in self.VULNERABILITY_DATABASE.keys():
+            if db_service in service or service in db_service:
+                return db_service
+        
+        # Port-based fallback for common services
+        port_service_map = {
+            21: 'ftp',
+            23: 'telnet',
+            139: 'netbios-ssn',
+            445: 'microsoft-ds',
+            512: 'exec',
+            513: 'login',
+            514: 'shell',
+            1099: 'java-rmi',
+            1524: 'bindshell',
+            2049: 'nfs',
+            3306: 'mysql',
+            3389: 'rdp',
+            5432: 'postgresql',
+            5900: 'vnc',
+            6000: 'x11',
+            6667: 'irc',
+            8009: 'ajp13'
+        }
+        return port_service_map.get(port)
+    
+    def _lookup_nvd_cves(self, product: str, version: str) -> List[Dict]:
+        """Lookup CVEs from NVD API."""
+        try:
+            # Try keyword search first (more flexible)
+            cves = self.nvd_client.search_cves_by_keyword(product, version if version != 'N/A' else None)
+            
+            # Sort by CVSS score (highest first) and recency
+            cves.sort(key=lambda x: (
+                x.get('cvss_score') or 0,
+                x.get('published', '')
+            ), reverse=True)
+            
+            return cves[:5]  # Return top 5 most severe/recent CVEs
+            
+        except Exception as e:
+            print(f"NVD lookup error for {product} {version}: {e}")
+            return []
+    
+    def _format_nvd_vulnerability(self, cve_data: Dict, service: str, product: str, version: str, port: int) -> Dict:
+        """Format NVD CVE data into our vulnerability structure."""
+        return {
+            'port': port,
+            'service': service,
+            'product': product,
+            'version': version,
+            'cve': cve_data.get('cve_id', 'N/A'),
+            'description': cve_data.get('description', 'No description available'),
+            'severity': cve_data.get('severity', 'UNKNOWN'),
+            'cvss': cve_data.get('cvss_score', 0.0),
+            'recommendation': f"Update {product} to the latest patched version. See CVE details for specific remediation.",
+            'source': 'nvd',  # Mark as NVD-sourced
+            'in_kev': cve_data.get('in_kev', False),  # CISA Known Exploited Vulnerability
+            'published': cve_data.get('published', 'N/A'),
+            'references': cve_data.get('references', [])
+        }
     
     def _check_misconfigurations(self, service: Dict, port: int) -> Optional[Dict]:
         """Check for common misconfigurations."""
@@ -387,7 +454,7 @@ class VulnerabilityAnalyzer:
             prompt = self._construct_ai_prompt(host_data)
             
             response = self.anthropic_client.messages.create(
-                model="claude-3-5-haiku-20241022",
+                model="claude-3-haiku-20240307",
                 max_tokens=1024,
                 messages=[{
                     "role": "user",
@@ -402,26 +469,40 @@ class VulnerabilityAnalyzer:
             return None
     
     def _construct_ai_prompt(self, host_data: Dict) -> str:
-        """Construct prompt for AI analysis."""
+        """Construct enhanced prompt for AI analysis."""
         services = host_data.get('services', [])
+        vulnerabilities = host_data.get('vulnerabilities', [])
+        
         service_list = '\n'.join([
             f"- Port {s['port']}/{s['protocol']}: {s['service_name']} {s.get('product', '')} {s.get('version', '')}"
             for s in services
         ])
         
-        prompt = f"""Analyze this network host for security vulnerabilities:
+        vuln_list = '\n'.join([
+            f"- {v.get('severity', 'UNKNOWN')}: {v.get('description', 'Unknown')} (Port {v.get('port', 'N/A')})"
+            for v in vulnerabilities[:10]  # Top 10 vulnerabilities
+        ])
+        
+        prompt = f"""Analyze this network host for security vulnerabilities and attack chains:
 
-IP: {host_data.get('ip', 'unknown')}
-OS: {host_data.get('os', {}).get('name', 'unknown')}
+Host Information:
+- IP: {host_data.get('ip', 'unknown')}
+- OS: {host_data.get('os', {}).get('name', 'unknown')}
+- Risk Score: {host_data.get('risk_score', 0)}
 
 Open Services:
 {service_list}
 
-Provide:
-1. Top 3 security concerns
-2. Potential attack vectors
-3. Priority remediation steps
+Detected Vulnerabilities:
+{vuln_list}
 
-Keep response concise and actionable."""
+Provide a structured analysis:
+
+1. **Critical Attack Scenarios**: Describe 2-3 realistic attack scenarios that exploit these vulnerabilities
+2. **Vulnerability Chains**: Identify how multiple vulnerabilities could be chained together for greater impact
+3. **Environment-Specific Risks**: Assess risks based on the service combination and OS
+4. **Priority Remediation**: List top 3 actions in order of urgency with specific steps
+
+Keep response focused and actionable. Use technical accuracy but clear language."""
         
         return prompt

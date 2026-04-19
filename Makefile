@@ -1,87 +1,85 @@
-.PHONY: setup clean archive test run batch demo reset help
+.PHONY: help build run stop clean logs shell setup restart status
 
-VENV = venv
-PYTHON = $(VENV)/bin/python
-PIP = $(VENV)/bin/pip
+# Docker configuration
+IMAGE_NAME := network-analyzer
+CONTAINER_NAME := network-analyzer-app
+PORT := 8080
 
-help:
-	@echo "AI-Assisted Network Exposure Analysis - Makefile Commands"
-	@echo "==========================================================="
-	@echo "make setup    - Create virtual environment and install dependencies"
-	@echo "make clean    - Remove generated data and reset to fresh state"
-	@echo "make archive  - Move old versions to archive folder"
-	@echo "make test     - Run test suite"
-	@echo "make run      - Execute pipeline on single scan (requires INPUT=path/to/scan.xml)"
-	@echo "                Example: make run INPUT=data/raw/infosecwarrior_fileserver.xml ARGS='--baseline data/baseline/infosecwarrior_fileserver.json --evaluate'"
-	@echo "make batch    - Execute pipeline on all scans in a directory (requires DIR=path/to/directory)"
-	@echo "                Example: make batch DIR=datasets/vulnerable-box-resources/Infosecwarrior"
-	@echo "make demo     - Run demo with synthetic sample data"
-	@echo "make reset    - Complete fresh start (clean + setup)"
-	@echo "make help     - Show this help message"
+.DEFAULT_GOAL := help
 
-setup:
-	@echo "Setting up project environment..."
-	python3 -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
-	@echo "Creating data directory structure..."
-	@mkdir -p data/raw data/processed data/baseline data/reports archive
-	@touch data/raw/.gitkeep data/processed/.gitkeep data/reports/.gitkeep
+help: ## Show available commands
+	@echo "🔧 AI-Assisted Network Exposure Analysis"
 	@echo ""
-	@echo "Setup complete! Next steps:"
-	@echo "1. Copy .env.example to .env and add your ANTHROPIC_API_KEY (optional)"
-	@echo "2. Run 'make demo' to test with synthetic data"
-	@echo "3. Run 'make run INPUT=data/raw/infosecwarrior_fileserver.xml ARGS=\"--baseline data/baseline/infosecwarrior_fileserver.json --evaluate\"' for real data"
-
-clean:
-	@echo "Cleaning generated data..."
-	rm -rf data/processed/*
-	rm -rf data/reports/*
-	@touch data/processed/.gitkeep data/reports/.gitkeep
-	@echo "Clean complete!"
-
-archive:
-	@echo "Archiving old versions..."
-	@mkdir -p archive/$$(date +%Y%m%d_%H%M%S)
-	@if [ -n "$$(ls -A data/reports 2>/dev/null | grep -v .gitkeep)" ]; then \
-		mv data/reports/* archive/$$(date +%Y%m%d_%H%M%S)/ 2>/dev/null || true; \
-	fi
-	@echo "Archive complete!"
-
-test:
-	@echo "Running tests..."
-	$(PYTHON) -m pytest tests/ -v
-
-run:
-	@if [ -z "$(INPUT)" ]; then \
-		echo "Error: INPUT parameter required. Usage: make run INPUT=data/raw/scan.xml"; \
-		exit 1; \
-	fi
-	@echo "Running pipeline on $(INPUT)..."
-	$(PYTHON) main.py --input $(INPUT) $(ARGS)
-
-batch:
-	@if [ -z "$(DIR)" ]; then \
-		echo "Error: DIR parameter required. Usage: make batch DIR=path/to/directory"; \
-		exit 1; \
-	fi
-	@if [ ! -d "$(DIR)" ]; then \
-		echo "Error: Directory not found: $(DIR)"; \
-		exit 1; \
-	fi
-	@echo "Running batch processing with summary report generation..."
-	$(PYTHON) batch_process.py "$(DIR)" $(ARGS)
-
-demo:
-	@echo "Running demo with synthetic sample data..."
-	@echo "(For real dataset, use: make run INPUT=data/raw/infosecwarrior_fileserver.xml ARGS='--baseline data/baseline/infosecwarrior_fileserver.json --evaluate')"
+	@echo "Quick Start:"
+	@echo "  1. make setup"
+	@echo "  2. Edit .env and add your ANTHROPIC_API_KEY"
+	@echo "  3. make build"
+	@echo "  4. make run"
+	@echo "  5. Open http://localhost:8080"
 	@echo ""
-	$(PYTHON) main.py --demo
+	@echo "Commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-reset: clean
-	@echo "Performing complete reset..."
-	rm -rf $(VENV)
-	@echo "Reset complete! Run 'make setup' to reinitialize."
+setup: ## Initial setup - copy .env.example and show instructions
+	@if [ ! -f .env ]; then \
+		cp .env.example .env; \
+		echo "✅ Created .env file"; \
+		echo ""; \
+		echo "⚠️  IMPORTANT: Edit .env and add your ANTHROPIC_API_KEY"; \
+		echo "   Get your key from: https://console.anthropic.com/"; \
+		echo ""; \
+		echo "Next steps:"; \
+		echo "  1. Edit .env file"; \
+		echo "  2. Run: make build"; \
+		echo "  3. Run: make run"; \
+	else \
+		echo "✅ .env file already exists"; \
+	fi
 
-install-deps:
-	$(PIP) install -r requirements.txt
+build: ## Build Docker image
+	@echo "🔨 Building Docker image..."
+	docker build -t $(IMAGE_NAME) .
+	@echo "✅ Build complete!"
+
+run: ## Run application in Docker container
+	@if [ ! -f .env ]; then \
+		echo "❌ Error: .env file not found"; \
+		echo "Run 'make setup' first"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting application..."
+	docker run -d \
+		--name $(CONTAINER_NAME) \
+		-p $(PORT):8080 \
+		--env-file .env \
+		-v $(PWD)/data:/app/data \
+		$(IMAGE_NAME)
+	@echo "✅ Application running!"
+	@echo "🌐 Open: http://localhost:$(PORT)"
+	@echo ""
+	@echo "Useful commands:"
+	@echo "  make logs  - View application logs"
+	@echo "  make stop  - Stop application"
+
+stop: ## Stop and remove container
+	@echo "🛑 Stopping application..."
+	@docker stop $(CONTAINER_NAME) 2>/dev/null || true
+	@docker rm $(CONTAINER_NAME) 2>/dev/null || true
+	@echo "✅ Stopped!"
+
+clean: ## Stop container and remove image
+	@echo "🧹 Cleaning up..."
+	@make stop
+	@docker rmi $(IMAGE_NAME) 2>/dev/null || true
+	@echo "✅ Cleanup complete!"
+
+logs: ## View application logs
+	@docker logs -f $(CONTAINER_NAME)
+
+shell: ## Open shell in running container
+	@docker exec -it $(CONTAINER_NAME) /bin/bash
+
+restart: stop run ## Restart application
+
+status: ## Check if application is running
+	@docker ps --filter name=$(CONTAINER_NAME) --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
