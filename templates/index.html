@@ -147,25 +147,30 @@ uploadBtn.addEventListener('click', async () => {
     progressFill.style.width = '0%';
     progressText.textContent = 'Starting upload...';
 
+    let progressInterval = null;
+    let scanId = null;
+
     try {
-        // Start upload
+        // Start upload (non-blocking)
         const uploadPromise = fetch('/upload', {
             method: 'POST',
             body: formData
         });
 
-        // Get scan ID from response to poll progress
+        // Wait briefly for scan ID to be created
         const response = await uploadPromise;
         const result = await response.json();
 
         if (response.ok) {
-            // Poll for progress updates
-            const scanId = result.scan_id;
-            const progressInterval = setInterval(async () => {
+            scanId = result.scan_id;
+            
+            // Start polling immediately for real-time progress
+            progressInterval = setInterval(async () => {
                 try {
                     const progressResponse = await fetch(`/api/progress/${scanId}`);
                     const progressData = await progressResponse.json();
                     
+                    // Update UI with real progress
                     progressFill.style.width = progressData.percent + '%';
                     progressText.textContent = progressData.step;
                     
@@ -179,15 +184,12 @@ uploadBtn.addEventListener('click', async () => {
                 } catch (err) {
                     console.error('Progress poll error:', err);
                 }
-            }, 500); // Poll every 500ms
-            
-            // Set initial progress
-            progressFill.style.width = '10%';
-            progressText.textContent = 'Processing scans...';
+            }, 300); // Poll every 300ms for faster updates
         } else {
             throw new Error(result.error || 'Upload failed');
         }
     } catch (error) {
+        if (progressInterval) clearInterval(progressInterval);
         alert('Error: ' + error.message);
         uploadBtn.disabled = false;
         progressSection.style.display = 'none';

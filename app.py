@@ -6,6 +6,7 @@ Provides web interface for uploading Nmap scans and viewing results.
 import os
 import uuid
 import json
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from werkzeug.utils import secure_filename
@@ -100,9 +101,64 @@ def index():
     return render_template('index.html')
 
 
+def process_files_async(scan_id, file_paths, use_ai):
+    """Process files asynchronously in background thread."""
+    results = []
+    errors = []
+    
+    def update_file_progress(step, percent):
+        """Update progress for current file."""
+        if scan_id not in scan_progress:
+            return
+            
+        file_idx = scan_progress[scan_id]['current_file']
+        total_files = scan_progress[scan_id]['total_files']
+        
+        # Calculate overall progress based on file progress
+        base_progress = (file_idx / total_files) * 80  # 0-80% for all files
+        file_progress = (percent / 100) * (80 / total_files)  # This file's contribution
+        overall_progress = 10 + base_progress + file_progress  # Start at 10%
+        
+        scan_progress[scan_id] = {
+            'step': f'{step} ({file_idx + 1}/{total_files})',
+            'percent': int(overall_progress),
+            'current_file': file_idx,
+            'total_files': total_files
+        }
+    
+    try:
+        for idx, (filename, file_path) in enumerate(file_paths):
+            scan_progress[scan_id]['current_file'] = idx
+            
+            try:
+                result = process_scan_file(file_path, use_ai=use_ai, progress_callback=update_file_progress)
+                results.append({
+                    'filename': filename,
+                    'data': result
+                })
+            except Exception as e:
+                errors.append({
+                    'filename': filename,
+                    'error': str(e)
+                })
+        
+        # Store results
+        scan_results[scan_id] = {
+            'timestamp': datetime.now(),
+            'results': results,
+            'errors': errors,
+            'use_ai': use_ai
+        }
+        
+        scan_progress[scan_id] = {'step': 'Complete', 'percent': 100}
+        
+    except Exception as e:
+        scan_progress[scan_id] = {'step': f'Error: {str(e)}', 'percent': 0}
+
+
 @app.route('/upload', methods=['POST'])
 def upload():
-    """Handle file upload and process scans."""
+    """Handle file upload and start async processing."""
     cleanup_old_scans()
     
     # Check if files were uploaded
@@ -126,75 +182,44 @@ def upload():
     # Initialize progress tracking
     scan_progress[scan_id] = {
         'step': 'Uploading files',
-        'percent': 10,
+        'percent': 5,
         'current_file': 0,
         'total_files': len(files)
     }
     
-    # Process uploaded files
-    results = []
-    errors = []
-    
-    def update_file_progress(step, percent):
-        """Update progress for current file."""
-        file_idx = scan_progress[scan_id]['current_file']
-        total_files = scan_progress[scan_id]['total_files']
-        
-        # Calculate overall progress based on file progress
-        base_progress = (file_idx / total_files) * 80  # 0-80% for all files
-        file_progress = (percent / 100) * (80 / total_files)  # This file's contribution
-        overall_progress = 10 + base_progress + file_progress  # Start at 10%
-        
-        scan_progress[scan_id] = {
-            'step': f'{step} ({file_idx + 1}/{total_files})',
-            'percent': int(overall_progress),
-            'current_file': file_idx,
-            'total_files': total_files
-        }
-    
-    for idx, file in enumerate(files):
-        scan_progress[scan_id]['current_file'] = idx
-        
+    # Save files and collect paths
+    file_paths = []
+    for file in files:
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(scan_dir, filename)
             file.save(file_path)
-            
-            try:
-                result = process_scan_file(file_path, use_ai=use_ai, progress_callback=update_file_progress)
-                results.append({
-                    'filename': filename,
-                    'data': result
-                })
-            except Exception as e:
-                errors.append({
-                    'filename': filename,
-                    'error': str(e)
-                })
-        else:
-            errors.append({
-                'filename': file.filename,
-                'error': 'Invalid file type'
-            })
+            file_paths.append((filename, file_path))
     
-    if not results:
-        scan_progress[scan_id] = {'step': 'Error', 'percent': 0}
-        return jsonify({'error': 'No valid scans processed', 'details': errors}), 400
+    if not file_paths:
+        scan_progress[scan_id] = {'step': 'Error: No valid files', 'percent': 0}
+        return jsonify({'error': 'No valid files uploaded'}), 400
     
-    # Store results
-    scan_results[scan_id] = {
-        'timestamp': datetime.now(),
-        'results': results,
-        'errors': errors,
-        'use_ai': use_ai
+    # Update progress
+    scan_progress[scan_id] = {
+        'step': 'Starting analysis',
+        'percent': 10,
+        'current_file': 0,
+        'total_files': len(file_paths)
     }
     
-    scan_progress[scan_id] = {'step': 'Complete', 'percent': 100}
+    # Start async processing
+    thread = threading.Thread(
+        target=process_files_async,
+        args=(scan_id, file_paths, use_ai),
+        daemon=True
+    )
+    thread.start()
     
+    # Return immediately with scan ID
     return jsonify({
         'scan_id': scan_id,
-        'processed': len(results),
-        'errors': len(errors)
+        'total_files': len(file_paths)
     })
 
 
