@@ -251,12 +251,13 @@ async function loadVulnerabilityDetails(hostIdx, vulnIdx) {
             html += `
                 <div class="vuln-detail-section technical-details">
                     <button class="btn-secondary" onclick="toggleTechnicalDetails(${hostIdx}, ${vulnIdx})" style="margin-top: 1rem;">
-                        📋 Show Technical Details
+                        📋 Show Technical Details & Validation
                     </button>
                     <div id="tech-details-${hostIdx}-${vulnIdx}" style="display: none; margin-top: 1rem;">
                         <h4>Technical Information</h4>
                         <p><strong>CVE:</strong> ${data.vulnerability.cve}</p>
                         <p><strong>CVSS Score:</strong> ${data.vulnerability.cvss}</p>
+                        <p><strong>Severity:</strong> ${data.vulnerability.severity}</p>
                         <p><strong>Service:</strong> ${data.vulnerability.service}</p>
                         <p><strong>Port:</strong> ${data.vulnerability.port}</p>
             `;
@@ -266,6 +267,69 @@ async function loadVulnerabilityDetails(hostIdx, vulnIdx) {
             }
             if (data.vulnerability.version && data.vulnerability.version !== 'N/A') {
                 html += `<p><strong>Version:</strong> ${data.vulnerability.version}</p>`;
+            }
+            if (data.vulnerability.published && data.vulnerability.published !== 'N/A') {
+                html += `<p><strong>Published:</strong> ${data.vulnerability.published}</p>`;
+            }
+            
+            // Nmap Evidence Section
+            if (data.vulnerability.nmap_evidence) {
+                const evidence = data.vulnerability.nmap_evidence;
+                html += `
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-left: 3px solid #3498db; border-radius: 4px;">
+                        <h5 style="margin-top: 0; color: #2c3e50;">🔍 Nmap Detection Evidence</h5>
+                        <p style="margin: 0.5rem 0; font-family: monospace; font-size: 0.9rem;">
+                            <strong>Port:</strong> ${evidence.port}/tcp<br>
+                            <strong>Service:</strong> ${evidence.service_name}<br>
+                            <strong>Product:</strong> ${evidence.product || 'Not detected'}<br>
+                            <strong>Version:</strong> ${evidence.version || 'Not detected'}<br>
+                `;
+                if (evidence.extrainfo) {
+                    html += `<strong>Extra Info:</strong> ${evidence.extrainfo}<br>`;
+                }
+                if (evidence.ostype) {
+                    html += `<strong>OS Type:</strong> ${evidence.ostype}<br>`;
+                }
+                html += `
+                            <strong>Detection Method:</strong> ${evidence.method}
+                        </p>
+                        <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #7f8c8d;">
+                            <em>This is the raw Nmap output used to identify this vulnerability. Use this to validate the finding.</em>
+                        </p>
+                    </div>
+                `;
+            }
+            
+            // Remediation Resources Section
+            const cveId = data.vulnerability.cve;
+            if (cveId && cveId !== 'N/A' && !cveId.startsWith('CONFIG-') && !cveId.startsWith('INFO-')) {
+                html += `
+                    <div style="margin-top: 1.5rem;">
+                        <h5 style="color: #2c3e50;">📚 Remediation Resources</h5>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <a href="https://nvd.nist.gov/vuln/detail/${cveId}" target="_blank" class="resource-link" style="color: #3498db; text-decoration: none; padding: 0.5rem; background: #ecf0f1; border-radius: 4px; display: block;">
+                                🔗 NVD - Official CVE Details
+                            </a>
+                            <a href="https://www.cve.org/CVERecord?id=${cveId}" target="_blank" class="resource-link" style="color: #3498db; text-decoration: none; padding: 0.5rem; background: #ecf0f1; border-radius: 4px; display: block;">
+                                🔗 MITRE CVE Record
+                            </a>
+                `;
+                
+                if (data.vulnerability.in_kev) {
+                    html += `
+                            <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" class="resource-link" style="color: #e74c3c; text-decoration: none; padding: 0.5rem; background: #fadbd8; border-radius: 4px; display: block;">
+                                ⚠️ CISA KEV Catalog - Actively Exploited!
+                            </a>
+                    `;
+                }
+                
+                html += `
+                            <a href="https://public.cyber.mil/stigs/" target="_blank" class="resource-link" style="color: #3498db; text-decoration: none; padding: 0.5rem; background: #ecf0f1; border-radius: 4px; display: block;">
+                                🔗 DISA STIGs - Security Technical Implementation Guides
+                            </a>
+                        </div>
+                    </div>
+                `;
             }
             
             html += `
@@ -321,7 +385,7 @@ function toggleTechnicalDetails(hostIdx, vulnIdx) {
         button.textContent = '📋 Hide Technical Details';
     } else {
         detailsDiv.style.display = 'none';
-        button.textContent = '📋 Show Technical Details';
+        button.textContent = '📋 Show Technical Details & Validation';
     }
 }
 

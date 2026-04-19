@@ -380,9 +380,9 @@ class VulnerabilityAnalyzer:
             print(f"NVD lookup error for {product} {version}: {e}")
             return []
     
-    def _format_nvd_vulnerability(self, cve_data: Dict, service: str, product: str, version: str, port: int) -> Dict:
+    def _format_nvd_vulnerability(self, cve_data: Dict, service: str, product: str, version: str, port: int, service_data: Dict = None) -> Dict:
         """Format NVD CVE data into our vulnerability structure."""
-        return {
+        vuln = {
             'port': port,
             'service': service,
             'product': product,
@@ -397,6 +397,20 @@ class VulnerabilityAnalyzer:
             'published': cve_data.get('published', 'N/A'),
             'references': cve_data.get('references', [])
         }
+        
+        # Add Nmap evidence for validation
+        if service_data:
+            vuln['nmap_evidence'] = {
+                'port': port,
+                'service_name': service_data.get('service_name', 'N/A'),
+                'product': service_data.get('product', 'N/A'),
+                'version': service_data.get('version', 'N/A'),
+                'extrainfo': service_data.get('extrainfo', ''),
+                'ostype': service_data.get('ostype', ''),
+                'method': service_data.get('method', 'table')
+            }
+        
+        return vuln
     
     def _check_misconfigurations(self, service: Dict, port: int) -> Optional[Dict]:
         """Check for common misconfigurations."""
