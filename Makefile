@@ -10,12 +10,13 @@ PORT := 8080
 help: ## Show available commands
 	@echo "AI-Assisted Network Exposure Analysis"
 	@echo ""
-	@echo "Quick Start (Python):"
-	@echo "  1. make setup"
-	@echo "  2. Edit .env and add your ANTHROPIC_API_KEY"
-	@echo "  3. make build"
-	@echo "  4. make run"
-	@echo "  5. Open http://localhost:8080"
+	@echo "Quick Start (4 Steps):"
+	@echo "  1. make setup   - Create .env file"
+	@echo "  2. make env     - Edit .env and add your ANTHROPIC_API_KEY"
+	@echo "  3. make build   - Install dependencies"
+	@echo "  4. make run     - Start application"
+	@echo ""
+	@echo "Then open: http://localhost:8080"
 	@echo ""
 	@echo "Docker Alternative:"
 	@echo "  Use 'make docker-build' and 'make docker-run' instead"
@@ -28,16 +29,23 @@ setup: ## Initial setup - copy .env.example and show instructions
 		cp .env.example .env; \
 		echo "[OK] Created .env file"; \
 		echo ""; \
-		echo "IMPORTANT: Edit .env and add your ANTHROPIC_API_KEY"; \
-		echo "   Get your key from: https://console.anthropic.com/"; \
-		echo ""; \
 		echo "Next steps:"; \
-		echo "  1. Edit .env file"; \
+		echo "  1. Run: make env (to edit API key)"; \
 		echo "  2. Run: make build"; \
 		echo "  3. Run: make run"; \
 	else \
 		echo "[OK] .env file already exists"; \
 	fi
+
+env: ## Edit .env file to add API keys
+	@if [ ! -f .env ]; then \
+		echo "[ERROR] .env file not found"; \
+		echo "Run 'make setup' first"; \
+		exit 1; \
+	fi
+	@echo "Opening .env file for editing..."
+	@echo "Add your ANTHROPIC_API_KEY from: https://console.anthropic.com/"
+	@open -e .env || nano .env
 
 build: ## Install Python dependencies
 	@echo "Installing dependencies..."

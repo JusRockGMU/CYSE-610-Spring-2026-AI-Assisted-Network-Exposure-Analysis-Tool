@@ -55,60 +55,59 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, fetch
 
 ### Prerequisites
 
-- **Python 3.9+** OR **Docker**
+- **Python 3.9+** (or **Docker** as alternative)
 - **Anthropic API Key** ([Get free key](https://console.anthropic.com/))
 
 ---
 
-### Option A: Docker Setup (Recommended)
-
-**Prerequisites:** Docker installed ([Get Docker](https://docs.docker.com/get-docker/))
+### Standard Setup (4 Steps)
 
 ```bash
-# Step 1: Setup environment
+# Step 1: Create .env file
 make setup
-# Edit .env and add your ANTHROPIC_API_KEY
 
-# Step 2: Build Docker image
+# Step 2: Edit .env and add your ANTHROPIC_API_KEY
+make env
+
+# Step 3: Install dependencies
 make build
 
-# Step 3: Run application
+# Step 4: Run application
 make run
-
-# Open browser: http://localhost:8080
 ```
 
-**Useful Commands:**
+**Then open:** http://localhost:8080
+
+---
+
+### Docker Alternative
+
+If you prefer Docker:
+
+```bash
+# Step 1: Create .env file
+make setup
+
+# Step 2: Edit .env and add your ANTHROPIC_API_KEY
+make env
+
+# Step 3: Build Docker image
+make docker-build
+
+# Step 4: Run in Docker
+make docker-run
+```
+
+**Docker Commands:**
 ```bash
 make logs    # View logs
-make stop    # Stop app
-make restart # Restart
-make status  # Check status
+make stop    # Stop container
+make clean   # Remove container and image
 ```
 
 ---
 
-### Option B: Local Python Setup
-
-**Prerequisites:** Python 3.9+ installed
-
-```bash
-# Step 1: Install dependencies
-pip install -r requirements.txt
-
-# Step 2: Setup environment
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-
-# Step 3: Run application
-python app.py
-
-# Open browser: http://localhost:8080
-```
-
----
-
-### Usage (Both Options)
+### Usage
 
 1. **Open browser**: http://localhost:8080
 2. **Upload Nmap scans**: Drag & drop XML files or click to browse
