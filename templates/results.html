@@ -360,26 +360,38 @@ function formatMarkdown(text) {
     // Convert markdown to HTML with proper formatting
     let html = text
         // Headers (must be done before other replacements)
-        .replace(/^### (.+)$/gm, '<h5 style="margin-top: 1rem; margin-bottom: 0.5rem; font-weight: 600;">$1</h5>')
-        .replace(/^## (.+)$/gm, '<h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; font-weight: 600; color: #2c3e50;">$1</h4>')
-        .replace(/^# (.+)$/gm, '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700; color: #2c3e50;">$1</h3>')
+        .replace(/^### (.+)$/gm, '\n<h5 style="margin-top: 1rem; margin-bottom: 0.5rem; font-weight: 600;">$1</h5>\n')
+        .replace(/^## (.+)$/gm, '\n<h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; font-weight: 600; color: #2c3e50;">$1</h4>\n')
+        .replace(/^# (.+)$/gm, '\n<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700; color: #2c3e50;">$1</h3>\n')
         // Numbered lists: 1. text -> <li>text</li>
-        .replace(/^\d+\.\s+(.+)$/gm, '<li style="margin-left: 1.5rem; margin-bottom: 0.5rem;">$1</li>')
+        .replace(/^\d+\.\s+(.+)$/gm, '<li style="margin-bottom: 0.5rem;">$1</li>')
         // Bullet lists: - text or * text -> <li>text</li>
-        .replace(/^[-*]\s+(.+)$/gm, '<li style="margin-left: 1.5rem; margin-bottom: 0.5rem; list-style-type: disc;">$1</li>')
-        // Bold: **text** -> <strong>text</strong> (do this before italic)
+        .replace(/^[-*]\s+(.+)$/gm, '<li style="margin-bottom: 0.5rem; list-style-type: disc;">$1</li>')
+        // Bold: **text** -> <strong>text</strong>
         .replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>')
         // Code: `text` -> <code>text</code>
-        .replace(/`(.+?)`/g, '<code style="background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
-        // Double line breaks -> paragraph breaks
-        .replace(/\n\n+/g, '</p><p style="margin-bottom: 1rem;">')
-        // Single line breaks -> <br>
-        .replace(/\n/g, '<br>');
+        .replace(/`(.+?)`/g, '<code style="background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>');
     
-    // Wrap content in paragraphs if not already in block elements
-    if (!html.startsWith('<h') && !html.startsWith('<li') && !html.startsWith('<p')) {
-        html = '<p style="margin-bottom: 1rem;">' + html + '</p>';
-    }
+    // Split into paragraphs by double newlines
+    const paragraphs = html.split(/\n\n+/);
+    
+    // Process each paragraph
+    html = paragraphs.map(para => {
+        para = para.trim();
+        if (!para) return '';
+        
+        // Don't wrap headers or lists in <p> tags
+        if (para.startsWith('<h') || para.startsWith('<li')) {
+            // Wrap consecutive list items in <ul>
+            if (para.includes('<li')) {
+                return '<ul style="margin-left: 1.5rem; margin-bottom: 1rem;">' + para + '</ul>';
+            }
+            return para;
+        }
+        
+        // Wrap regular text in paragraph tags
+        return '<p style="margin-bottom: 1rem;">' + para.replace(/\n/g, ' ') + '</p>';
+    }).join('');
     
     return html;
 }
