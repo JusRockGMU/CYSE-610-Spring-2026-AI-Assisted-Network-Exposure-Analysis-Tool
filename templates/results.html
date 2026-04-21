@@ -465,7 +465,7 @@ async function askQuestion() {
         if (response.ok) {
             responseDiv.innerHTML = `
                 <div class="qa-question"><strong>Q:</strong> ${data.question}</div>
-                <div class="qa-answer"><strong>A:</strong> ${data.answer}</div>
+                <div class="qa-answer"><strong>A:</strong> ${formatMarkdown(data.answer)}</div>
             `;
         } else {
             responseDiv.innerHTML = `<div class="error">${data.error}</div>`;
