@@ -45,6 +45,11 @@ class DataProcessor:
         Returns:
             Processed and normalized data
         """
+        print("\n" + "="*80)
+        print("🔧 PROCESSOR.PROCESS() CALLED")
+        print(f"   Input hosts: {len(scan_data.get('hosts', []))}")
+        print("="*80 + "\n")
+        
         processed = {
             'metadata': {
                 'scan_time': scan_data.get('scan_time', ''),
@@ -92,6 +97,17 @@ class DataProcessor:
         
         processed_host['risk_summary']['total_open_ports'] = len(processed_host['services'])
         
+        # Debug: Show what processor is outputting
+        print(f"\nPROCESSOR OUTPUT for {ip_address}:")
+        print(f"  Total services: {len(processed_host['services'])}")
+        smb_services = [s for s in processed_host['services'] if s.get('port') in [139, 445]]
+        print(f"  SMB services (139, 445): {len(smb_services)}")
+        for s in processed_host['services']:
+            port = s.get('port')
+            name = s.get('service_name')
+            marker = "🔥 SMB" if port in [139, 445] else ""
+            print(f"    Port {port}: {name} {marker}")
+        
         return processed_host
     
     def _process_service(self, port: Dict, ip: str) -> Dict:
@@ -103,6 +119,7 @@ class DataProcessor:
         service_name = service_info.get('name', 'unknown')
         product = service_info.get('product', '')
         version = service_info.get('version', '')
+        cpe_list = service_info.get('cpe', [])  # Extract CPE data
         
         service = {
             'port': port_num,
@@ -111,6 +128,7 @@ class DataProcessor:
             'service_name': service_name,
             'product': product,
             'version': version,
+            'cpe': cpe_list,  # Preserve CPE for vulnerability matching
             'banner': self._construct_banner(service_info),
             'risk_level': self._assess_port_risk(port_num, service_name),
             'features': self._extract_features(port_num, service_name, product, version)
@@ -142,10 +160,11 @@ class DataProcessor:
             best_match = max(matches, key=lambda x: x.get('accuracy', 0))
             return {
                 'name': best_match.get('name', 'unknown'),
-                'accuracy': best_match.get('accuracy', 0)
+                'accuracy': best_match.get('accuracy', 0),
+                'matches': matches  # Preserve full matches for analyzer
             }
         
-        return {'name': 'unknown', 'accuracy': 0}
+        return {'name': 'unknown', 'accuracy': 0, 'matches': []}
     
     def _construct_banner(self, service_info: Dict) -> str:
         """Construct service banner string."""

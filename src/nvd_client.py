@@ -80,30 +80,40 @@ class NVDClient:
             print(f"NVD API error: {e}")
             return []
     
-    def search_cves_by_keyword(self, product: str, version: str = None) -> List[Dict]:
+    def search_cves_by_cpe(self, cpe_string: str) -> List[Dict]:
         """
-        Search for CVEs by product name and optional version.
+        Search for CVEs by CPE (Common Platform Enumeration).
+        This is more precise than keyword search.
         
         Args:
-            product: Product name (e.g., "vsftpd", "openssh")
-            version: Optional version number
+            cpe_string: CPE identifier (e.g., "cpe:/a:microsoft:internet_information_services:7.5")
             
         Returns:
             List of CVE dictionaries
         """
-        # Build search keyword
-        keyword = product
-        if version:
-            keyword = f"{product} {version}"
+        # Convert CPE 2.2 format to CPE 2.3 format if needed
+        # cpe:/a:vendor:product:version -> cpe:2.3:a:vendor:product:version:*:*:*:*:*:*:*
+        if cpe_string.startswith('cpe:/'):
+            parts = cpe_string[5:].split(':')
+            # Build CPE 2.3 format
+            cpe_23 = f"cpe:2.3:{':'.join(parts)}"
+            # Pad with wildcards if needed
+            while cpe_23.count(':') < 12:
+                cpe_23 += ':*'
+        else:
+            cpe_23 = cpe_string
         
-        cache_key = f"keyword_{keyword}"
+        cache_key = f"cpe_{cpe_23}"
         if cache_key in self.cache:
             return self.cache[cache_key]
+        
+        print(f"Querying NVD by CPE: {cpe_23}")
         
         self._rate_limit()
         
         params = {
-            'keywordSearch': keyword
+            'cpeName': cpe_23,
+            'resultsPerPage': 100
         }
         
         headers = {}
@@ -117,8 +127,83 @@ class NVDClient:
             data = response.json()
             cves = self._parse_cve_response(data)
             
+            print(f"Found {len(cves)} CVEs for CPE: {cpe_23}")
+            
             # Cache the results
             self.cache[cache_key] = cves
+            
+            return cves
+            
+        except requests.exceptions.RequestException as e:
+            print(f"NVD API error for CPE query: {e}")
+            return []
+    
+    def search_cves_by_keyword(self, product: str, version: str = None, prioritize_kev: bool = True) -> List[Dict]:
+        """
+        Search for CVEs by product name and optional version.
+        
+        Args:
+            product: Product name (e.g., "vsftpd", "openssh")
+            version: Optional version number
+            prioritize_kev: If True, first search for KEV vulnerabilities, then all
+            
+        Returns:
+            List of CVE dictionaries
+        """
+        # Build search keyword
+        keyword = product
+        if version:
+            keyword = f"{product} {version}"
+        
+        cache_key = f"keyword_{keyword}_kev_{prioritize_kev}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        all_cves = []
+        
+        # Strategy 1: Search for CISA KEV (actively exploited) first
+        if prioritize_kev:
+            kev_cves = self._search_with_params(keyword, has_kev=True)
+            all_cves.extend(kev_cves)
+            print(f"Found {len(kev_cves)} KEV vulnerabilities for '{keyword}'")
+        
+        # Strategy 2: Search for HIGH/CRITICAL severity
+        high_crit_cves = self._search_with_params(keyword, severity='HIGH')
+        all_cves.extend(high_crit_cves)
+        
+        critical_cves = self._search_with_params(keyword, severity='CRITICAL')
+        all_cves.extend(critical_cves)
+        
+        # Cache the results
+        self.cache[cache_key] = all_cves
+        
+        return all_cves
+    
+    def _search_with_params(self, keyword: str, has_kev: bool = False, severity: str = None) -> List[Dict]:
+        """Internal method to search with specific filter parameters."""
+        self._rate_limit()
+        
+        params = {
+            'keywordSearch': keyword,
+            'resultsPerPage': 100  # Increased from default 20
+        }
+        
+        if has_kev:
+            params['hasKev'] = ''  # Flag parameter, no value needed
+        
+        if severity:
+            params['cvssV3Severity'] = severity
+        
+        headers = {}
+        if self.api_key:
+            headers['apiKey'] = self.api_key
+        
+        try:
+            response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            cves = self._parse_cve_response(data)
             
             return cves
             
@@ -165,6 +250,18 @@ class NVDClient:
                     cvss_score = cvss_data.get('baseScore')
                     severity = cvss_data.get('baseSeverity', metric.get('baseSeverity', 'UNKNOWN'))
                     break
+            
+            # Recalculate severity from CVSS score to ensure consistency
+            # (NVD sometimes has mismatched severity labels, especially for older CVEs)
+            if cvss_score is not None:
+                if cvss_score >= 9.0:
+                    severity = 'CRITICAL'
+                elif cvss_score >= 7.0:
+                    severity = 'HIGH'
+                elif cvss_score >= 4.0:
+                    severity = 'MEDIUM'
+                else:
+                    severity = 'LOW'
             
             # Get published and modified dates
             published = cve_data.get('published', 'N/A')

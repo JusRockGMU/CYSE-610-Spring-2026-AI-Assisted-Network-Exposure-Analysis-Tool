@@ -68,7 +68,7 @@ Provide actionable remediation steps with specific technical guidance.
 Format your response with clear section headers and be technical but accessible. Use 2-3 sentences per section."""
             
             response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=1024,
                 messages=[{
                     "role": "user",
@@ -128,7 +128,7 @@ Provide:
 Write for a non-technical executive audience. Keep it under 200 words."""
             
             response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=512,
                 messages=[{
                     "role": "user",
@@ -206,7 +206,7 @@ User Question: {question}
 Provide a clear, specific answer based on the scan data. If the question asks for recommendations, be actionable and specific. If the data doesn't contain enough information to fully answer, say so."""
             
             response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=1024,
                 messages=[{
                     "role": "user",
@@ -261,7 +261,7 @@ Provide comprehensive remediation guidance:
 Be specific, technical, and actionable. Include actual commands where possible."""
             
             response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
                 messages=[{
                     "role": "user",
