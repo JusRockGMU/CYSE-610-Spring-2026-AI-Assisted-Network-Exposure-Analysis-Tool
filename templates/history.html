@@ -80,14 +80,26 @@
 .scan-card-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 1rem;
+}
+
+.scan-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.scan-filename {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #2c3e50;
 }
 
 .scan-id {
     font-family: monospace;
     color: #7f8c8d;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
 }
 
 .scan-status {
@@ -234,10 +246,26 @@ function renderScans(filter) {
         return;
     }
     
-    scansList.innerHTML = filteredScans.map(scan => `
+    scansList.innerHTML = filteredScans.map(scan => {
+        // Format filenames for display
+        let filenameDisplay = '';
+        if (scan.filenames && scan.filenames.length > 0) {
+            if (scan.filenames.length === 1) {
+                filenameDisplay = scan.filenames[0];
+            } else {
+                filenameDisplay = `${scan.filenames.length} files: ${scan.filenames.join(', ')}`;
+            }
+        } else {
+            filenameDisplay = `${scan.file_count || 1} file(s)`;
+        }
+        
+        return `
         <div class="scan-card" data-status="${scan.status.toLowerCase()}">
             <div class="scan-card-header">
-                <span class="scan-id">ID: ${scan.scan_id}</span>
+                <div class="scan-header-left">
+                    <div class="scan-filename">${filenameDisplay}</div>
+                    <span class="scan-id">ID: ${scan.scan_id}</span>
+                </div>
                 <span class="scan-status ${scan.status.toLowerCase()}">${scan.status}</span>
             </div>
             <div class="scan-info">
@@ -281,7 +309,8 @@ function renderScans(filter) {
                 </button>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function formatTimestamp(timestamp) {

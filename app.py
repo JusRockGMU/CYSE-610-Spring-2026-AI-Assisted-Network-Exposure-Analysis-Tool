@@ -178,6 +178,12 @@ def get_scans():
             scan_info['step'] = progress.get('step', 'Unknown')
             scan_info['percent'] = progress.get('percent', 0)
             scan_info['file_count'] = progress.get('total_files', 1)
+            scan_info['filenames'] = progress.get('filenames', [])
+            
+            # Get timestamp from start_time
+            start_time = progress.get('start_time')
+            if start_time:
+                scan_info['timestamp'] = start_time.isoformat()
             
             # Check for explicit status first (e.g., 'Cancelled')
             explicit_status = progress.get('status')
