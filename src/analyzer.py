@@ -3,26 +3,40 @@ import json
 from typing import Dict, List, Optional
 from anthropic import Anthropic
 from .nvd_client import NVDClient
+from .ai_validator import AIValidator
 
 
 class VulnerabilityAnalyzer:
-    """Analyze processed scan data for vulnerabilities using rule-based and AI methods."""
+    """Analyze processed scan data for vulnerabilities using AI-enhanced detection."""
     
-    # All vulnerability detection now uses NVD API automation
-    # No hardcoded rules - rely on context-aware NVD queries with KEV prioritization
+    # Safety limits
+    MAX_PORTS_PER_HOST = 50  # Maximum ports to analyze per host (prevents infinite loops)
+    
+    # All vulnerability detection now uses NVD API automation with AI validation
+    # No hardcoded rules - rely on AI-enhanced CPE matching and NVD queries
     VULNERABILITY_DATABASE = {}
     
-    def __init__(self, use_ai: bool = False, use_nvd: bool = True):
-        """Initialize the analyzer with optional AI and NVD support."""
+    def __init__(self, use_ai: bool = False, use_nvd: bool = True, deep_analysis: bool = True):
+        """Initialize the analyzer with optional AI and NVD support.
+        
+        Args:
+            use_ai: Enable AI-enhanced analysis
+            use_nvd: Enable NVD API integration
+            deep_analysis: Enable iterative refinement (slower but more accurate)
+        """
         self.use_ai = use_ai
         self.use_nvd = use_nvd
+        self.deep_analysis = deep_analysis
         self.anthropic_client = None
         self.nvd_client = None
+        self.ai_validator = None
         
         if use_ai:
             api_key = os.getenv('ANTHROPIC_API_KEY')
             if api_key:
                 self.anthropic_client = Anthropic(api_key=api_key)
+                self.ai_validator = AIValidator()
+                print("AI-enhanced vulnerability detection enabled")
             else:
                 print("Warning: ANTHROPIC_API_KEY not found. AI features disabled.")
         
@@ -32,12 +46,13 @@ class VulnerabilityAnalyzer:
             self.nvd_client = NVDClient(api_key=nvd_api_key)
             print("NVD API integration enabled for real-time CVE lookups")
     
-    def analyze(self, processed_data: Dict) -> Dict:
+    def analyze(self, processed_data: Dict, progress_callback=None) -> Dict:
         """
         Analyze processed data for vulnerabilities.
         
         Args:
             processed_data: Processed scan data
+            progress_callback: Optional callback for progress updates (step, percent, status)
             
         Returns:
             Analysis results with identified vulnerabilities
@@ -55,8 +70,15 @@ class VulnerabilityAnalyzer:
             'hosts': []
         }
         
-        for host in processed_data.get('hosts', []):
-            host_analysis = self._analyze_host(host)
+        total_hosts = len(processed_data.get('hosts', []))
+        for host_idx, host in enumerate(processed_data.get('hosts', [])):
+            if progress_callback:
+                progress_callback(
+                    f'Analyzing host {host_idx + 1}/{total_hosts}',
+                    50 + int((host_idx / total_hosts) * 30),
+                    'Analyzing'
+                )
+            host_analysis = self._analyze_host(host, progress_callback)
             analysis['hosts'].append(host_analysis)
             
             analysis['summary']['total_hosts'] += 1
@@ -81,13 +103,14 @@ class VulnerabilityAnalyzer:
         
         return analysis
     
-    def _analyze_host(self, host: Dict) -> Dict:
+    def _analyze_host(self, host: Dict, progress_callback=None) -> Dict:
         """Analyze individual host for vulnerabilities."""
         host_analysis = {
             'ip': host.get('ip', 'unknown'),
             'hostname': host.get('hostname', ''),
             'os': host.get('os', {}),
             'vulnerabilities': [],
+            'filtered_vulnerabilities': [],  # CVEs filtered out by AI
             'risk_score': 0
         }
         
@@ -109,12 +132,30 @@ class VulnerabilityAnalyzer:
             print(f"DEBUG: Service {i+1}/{len(services)}: port={port}, name={name} {marker}")
         print(f"{'='*80}\n")
         
-        for service in services:
-            vulns = self._analyze_service(service, host.get('ip', ''), os_context)
-            host_analysis['vulnerabilities'].extend(vulns)
+        total_services = len(services)
+        # Apply safety cap to prevent excessive processing
+        services_to_analyze = services[:self.MAX_PORTS_PER_HOST]
+        if len(services) > self.MAX_PORTS_PER_HOST:
+            print(f"⚠️  WARNING: Host has {len(services)} ports. Limiting analysis to first {self.MAX_PORTS_PER_HOST} ports for safety.")
+        
+        for service_idx, service in enumerate(services_to_analyze):
+            port = service.get('port', 'unknown')
+            service_name = service.get('service_name', 'unknown')
+            
+            if progress_callback:
+                progress_callback(
+                    f'Checking service on port {port} ({service_idx + 1}/{total_services})',
+                    50 + int((service_idx / total_services) * 30),
+                    'NVD Query'
+                )
+            
+            final_vulns, filtered_vulns = self._analyze_service(service, host.get('ip', ''), os_context, progress_callback)
+            host_analysis['vulnerabilities'].extend(final_vulns)
+            host_analysis['filtered_vulnerabilities'].extend(filtered_vulns)
         
         # Consolidate duplicate CVEs across multiple ports
         host_analysis['vulnerabilities'] = self._consolidate_vulnerabilities(host_analysis['vulnerabilities'])
+        host_analysis['filtered_vulnerabilities'] = self._consolidate_vulnerabilities(host_analysis['filtered_vulnerabilities'])
         
         # Generate AI explanations for each vulnerability if AI is enabled
         if self.use_ai and self.anthropic_client:
@@ -204,9 +245,14 @@ class VulnerabilityAnalyzer:
         
         return list(cve_map.values())
     
-    def _analyze_service(self, service: Dict, ip: str, os_context: Dict = None) -> List[Dict]:
-        """Analyze individual service for vulnerabilities."""
+    def _analyze_service(self, service: Dict, ip: str, os_context: Dict = None, progress_callback=None) -> tuple:
+        """Analyze individual service for vulnerabilities.
+        
+        Returns:
+            tuple: (final_vulnerabilities, filtered_vulnerabilities)
+        """
         vulnerabilities = []
+        filtered_vulnerabilities = []
         
         service_name = service.get('service_name', '').lower()
         port = service.get('port', 0)
@@ -216,10 +262,27 @@ class VulnerabilityAnalyzer:
         print(f"DEBUG: Analyzing service - port={port}, service_name={service_name}, product={product}")
         
         # Pass full service data and OS context for better detection
-        vuln = self._check_known_vulnerabilities(service_name, product, version, port, service, os_context)
-        if vuln:
-            vulnerabilities.append(vuln)
-            print(f"DEBUG: Found vulnerability for port {port}: {vuln.get('cve', 'UNKNOWN')}")
+        result = self._check_known_vulnerabilities(service_name, product, version, port, service, os_context, progress_callback)
+        if result:
+            # Result is now a tuple: (final_vulns, filtered_vulns)
+            if isinstance(result, tuple):
+                final_vulns, filtered_vulns = result
+                if isinstance(final_vulns, list):
+                    vulnerabilities.extend(final_vulns)
+                elif final_vulns:
+                    vulnerabilities.append(final_vulns)
+                if isinstance(filtered_vulns, list):
+                    filtered_vulnerabilities.extend(filtered_vulns)
+                elif filtered_vulns:
+                    filtered_vulnerabilities.append(filtered_vulns)
+                print(f"DEBUG: Found {len(vulnerabilities)} final, {len(filtered_vulnerabilities)} filtered for port {port}")
+            # Backward compatibility: handle old format
+            elif isinstance(result, list):
+                vulnerabilities.extend(result)
+                print(f"DEBUG: Found {len(result)} vulnerabilities for port {port}")
+            else:
+                vulnerabilities.append(result)
+                print(f"DEBUG: Found vulnerability for port {port}: {result.get('cve', 'UNKNOWN')}")
         else:
             print(f"DEBUG: No vulnerability found for port {port}, service {service_name}")
         
@@ -227,46 +290,201 @@ class VulnerabilityAnalyzer:
         if config_vuln:
             vulnerabilities.append(config_vuln)
         
-        return vulnerabilities
+        return vulnerabilities, filtered_vulnerabilities
     
-    def _check_known_vulnerabilities(self, service: str, product: str, version: str, port: int, service_data: Dict = None, os_context: Dict = None) -> Optional[Dict]:
+    def _check_known_vulnerabilities(self, service: str, product: str, version: str, port: int, service_data: Dict = None, os_context: Dict = None, progress_callback=None) -> Optional[Dict]:
         """
-        Check for known vulnerabilities using CPE-first approach:
-        1. Try CPE-based matching (most precise)
-        2. Fallback to keyword search if no CPE available
-        3. Prioritize CISA KEV (actively exploited)
-        4. Filter for relevance and impact
+        Multi-pass AI-enhanced vulnerability detection with consensus:
+        1. Run multiple independent AI+NVD query passes (to account for AI variability)
+        2. Track which CVEs appear consistently across passes
+        3. Use consensus to assign confidence levels (high=all passes, medium=most, low=some)
         """
         
         if not self.use_nvd or not self.nvd_client:
-            # Fallback to hardcoded rules if NVD not available
             return self._check_hardcoded_vulnerabilities(service, product, version, port)
         
-        nvd_cves = []
+        # Multi-pass configuration
+        num_passes = 3 if self.deep_analysis and self.ai_validator else 1
+        print(f"\n🔄 PORT {port} - MULTI-PASS ANALYSIS ({num_passes} passes)")
         
-        # STRATEGY 1: Try CPE-based matching first (most precise)
-        cpe_list = service_data.get('cpe', []) if service_data else []
-        if cpe_list:
-            print(f"DEBUG: Found {len(cpe_list)} CPE entries for port {port}")
-            for cpe in cpe_list:
-                # Only use application-level CPE (cpe:/a:... or cpe:2.3:a:...), not OS-level (cpe:/o:...)
-                if 'cpe:/a:' in cpe or 'cpe:2.3:a:' in cpe:
-                    print(f"DEBUG: Querying NVD with application CPE: {cpe}")
-                    cpe_cves = self.nvd_client.search_cves_by_cpe(cpe)
-                    nvd_cves.extend(cpe_cves)
-                    if cpe_cves:
-                        print(f"DEBUG: CPE query returned {len(cpe_cves)} CVEs - using precise matching")
-                        # If CPE matching found results, use them (no need for keyword fallback)
-                        break
+        # Track CVE appearances across passes
+        final_cve_appearances = {}  # {cve_id: {'count': N, 'cve_data': Dict, 'passes': [1,2,3]}}
+        filtered_cve_appearances = {}  # Track filtered CVEs too
         
-        # STRATEGY 2: Fallback to keyword search if no CPE results
-        if not nvd_cves:
-            print(f"DEBUG: No CPE results, falling back to keyword search")
-            search_keywords = self._build_search_keywords(service, product, os_context)
+        for pass_num in range(1, num_passes + 1):
+            print(f"\n  📍 Pass {pass_num}/{num_passes}")
+            pass_results = self._single_pass_vulnerability_check(service, product, version, port, service_data, os_context, progress_callback, pass_num)
             
-            for keyword in search_keywords:
-                cves = self._lookup_nvd_by_keyword(keyword, version)
-                nvd_cves.extend(cves)
+            # Track final CVEs from this pass
+            for cve in pass_results.get('final', []):
+                cve_id = cve.get('cve_id')
+                if cve_id:
+                    if cve_id not in final_cve_appearances:
+                        final_cve_appearances[cve_id] = {'count': 0, 'cve_data': cve, 'passes': []}
+                    final_cve_appearances[cve_id]['count'] += 1
+                    final_cve_appearances[cve_id]['passes'].append(pass_num)
+            
+            # Track filtered CVEs from this pass
+            for cve in pass_results.get('filtered', []):
+                cve_id = cve.get('cve_id')
+                if cve_id:
+                    if cve_id not in filtered_cve_appearances:
+                        filtered_cve_appearances[cve_id] = {'count': 0, 'cve_data': cve, 'passes': []}
+                    filtered_cve_appearances[cve_id]['count'] += 1
+                    filtered_cve_appearances[cve_id]['passes'].append(pass_num)
+            
+            # Send cumulative CVE list to frontend after each pass
+            if progress_callback and final_cve_appearances:
+                cumulative_cve_ids = list(final_cve_appearances.keys())
+                progress_callback(
+                    f'Pass {pass_num}/{num_passes}: Found {len(cumulative_cve_ids)} unique CVEs so far',
+                    60 + (pass_num * 5),
+                    f'Multi-Pass Analysis',
+                    {'port': port, 'cves': cumulative_cve_ids, 'stage': 'found', 'pass': pass_num}
+                )
+        
+        # Calculate consensus-based confidence
+        print(f"\n🎯 PORT {port} - CONSENSUS ANALYSIS:")
+        consensus_cves = []
+        all_filtered_cves = []
+        
+        # Process final CVEs (those that passed AI filtering in at least one pass)
+        for cve_id, data in final_cve_appearances.items():
+            count = data['count']
+            cve = data['cve_data']
+            
+            # Assign confidence based on how many passes found this CVE
+            if count == num_passes:
+                confidence = 'high'
+            elif count >= num_passes * 0.66:  # 2 out of 3
+                confidence = 'medium'
+            else:
+                confidence = 'low'
+            
+            cve['ai_confidence'] = confidence
+            cve['consensus_score'] = count
+            
+            # Separate low confidence CVEs (might be false positives)
+            if confidence == 'low':
+                # Build comprehensive filter reason
+                reasons = []
+                reasons.append(f'Low consensus: appeared as valid in only {count}/{num_passes} passes')
+                
+                # Add AI reasoning if available
+                if cve.get('ai_reasoning'):
+                    reasons.append(f"AI analysis: {cve.get('ai_reasoning')}")
+                
+                # Add original filter reason if it exists
+                if cve.get('filter_reason') and 'consensus' not in cve.get('filter_reason', '').lower():
+                    reasons.append(cve.get('filter_reason'))
+                
+                cve['filter_reason'] = '. '.join(reasons)
+                cve['filtered_by'] = 'Multi-Pass Consensus Analysis'
+                cve['consensus_score'] = count
+                all_filtered_cves.append(cve)
+            else:
+                consensus_cves.append(cve)
+            
+            print(f"  {cve_id}: {count}/{num_passes} passes → {confidence.upper()} confidence")
+        
+        # Add consistently filtered CVEs (filtered in all passes)
+        for cve_id, data in filtered_cve_appearances.items():
+            # Skip if this CVE also appeared in final (already processed above)
+            if cve_id in final_cve_appearances:
+                continue
+            
+            count = data['count']
+            cve = data['cve_data']
+            
+            # Build comprehensive filter reason for consistently filtered CVEs
+            reasons = []
+            reasons.append(f'Consistently filtered by AI in {count}/{num_passes} passes')
+            
+            # Add AI reasoning if available
+            if cve.get('ai_reasoning'):
+                reasons.append(f"Reason: {cve.get('ai_reasoning')}")
+            elif cve.get('filter_reason'):
+                reasons.append(cve.get('filter_reason'))
+            
+            # Add confidence assessment
+            if cve.get('cvss_score'):
+                cvss = cve.get('cvss_score')
+                if cvss >= 9.0:
+                    reasons.append(f"Note: High CVSS score ({cvss}) but filtered due to low applicability")
+            
+            cve['filter_reason'] = '. '.join(reasons)
+            cve['filtered_by'] = cve.get('filtered_by', 'AI Analysis')
+            cve['ai_confidence'] = 'filtered'  # Mark as filtered
+            cve['consensus_score'] = 0  # Didn't pass any consensus
+            all_filtered_cves.append(cve)
+            print(f"  {cve_id}: Filtered in {count}/{num_passes} passes")
+        
+        # Format vulnerabilities
+        final_vulns = [self._format_nvd_vulnerability(cve, service, product, version, port, service_data) 
+                      for cve in consensus_cves]
+        filtered_vulns = [self._format_nvd_vulnerability(cve, service, product, version, port, service_data) 
+                         for cve in all_filtered_cves]
+        
+        print(f"\n  ✅ Final: {len(final_vulns)} high/medium confidence CVEs")
+        print(f"  🚫 Filtered: {len(filtered_vulns)} CVEs (low consensus + consistently filtered)")
+        
+        return (final_vulns, filtered_vulns)
+    
+    def _single_pass_vulnerability_check(self, service: str, product: str, version: str, port: int, service_data: Dict = None, os_context: Dict = None, progress_callback=None, pass_num: int = 1) -> List[Dict]:
+        """Single pass of vulnerability detection (called multiple times for consensus)."""
+        nvd_cves = []
+        ai_enhanced_keywords = []
+        
+        # STAGE 1: AI-Enhanced CPE Validation and Keyword Generation (only in deep analysis mode)
+        if self.deep_analysis and self.ai_validator and service_data:
+            if progress_callback:
+                progress_callback(f'AI enhancing CPE for port {port}', 55, 'AI Processing')
+            print(f"DEBUG: Using AI to enhance CPE and keywords for port {port}")
+            ai_enhancement = self.ai_validator.enhance_cpe_and_keywords(service_data, os_context)
+            
+            # Use AI-validated CPE if available
+            validated_cpe = ai_enhancement.get('validated_cpe', '')
+            if validated_cpe:
+                print(f"DEBUG: AI validated/suggested CPE: {validated_cpe}")
+                # Try AI-suggested CPE first
+                cpe_cves = self.nvd_client.search_cves_by_cpe(validated_cpe)
+                if cpe_cves:
+                    nvd_cves.extend(cpe_cves)
+                    print(f"DEBUG: AI-validated CPE returned {len(cpe_cves)} CVEs")
+            
+            # Get AI-optimized search keywords
+            ai_enhanced_keywords = ai_enhancement.get('search_keywords', [])
+            print(f"DEBUG: AI suggested keywords: {ai_enhanced_keywords}")
+        
+        # STRATEGY 2: Try original CPE-based matching if AI didn't find results
+        if not nvd_cves:
+            if progress_callback:
+                progress_callback(f'Querying NVD for port {port}', 60, 'NVD Query')
+            cpe_list = service_data.get('cpe', []) if service_data else []
+            if cpe_list:
+                print(f"DEBUG: Found {len(cpe_list)} CPE entries for port {port}")
+                for cpe in cpe_list:
+                    # Only use application-level CPE (cpe:/a:... or cpe:2.3:a:...), not OS-level (cpe:/o:...)
+                    if 'cpe:/a:' in cpe or 'cpe:2.3:a:' in cpe:
+                        print(f"DEBUG: Querying NVD with application CPE: {cpe}")
+                        cpe_cves = self.nvd_client.search_cves_by_cpe(cpe)
+                        nvd_cves.extend(cpe_cves)
+                        if cpe_cves:
+                            print(f"DEBUG: CPE query returned {len(cpe_cves)} CVEs")
+                            # Continue checking other CPEs to get comprehensive results
+        
+        # STRATEGY 3: Supplement with keyword search (AI-enhanced if available)
+        # Always do keyword search to catch CVEs that CPE matching might miss
+        print(f"DEBUG: Supplementing with keyword search (found {len(nvd_cves)} from CPE)")
+        
+        # Use AI-enhanced keywords first, then fallback to traditional keywords
+        search_keywords = ai_enhanced_keywords if ai_enhanced_keywords else self._build_search_keywords(service, product, os_context)
+        
+        for keyword in search_keywords:
+            cves = self._lookup_nvd_by_keyword(keyword, version)
+            if cves:
+                print(f"DEBUG: Keyword '{keyword}' returned {len(cves)} additional CVEs")
+            nvd_cves.extend(cves)
         
         if nvd_cves:
             # Remove duplicates
@@ -278,15 +496,79 @@ class VulnerabilityAnalyzer:
                     seen_cves.add(cve_id)
                     unique_cves.append(cve)
             
+            # Debug: Log all found CVEs
+            print(f"\n📋 PORT {port} - NVD QUERY RESULTS:")
+            print(f"  Total CVEs found: {len(unique_cves)}")
+            for cve in unique_cves:
+                print(f"    - {cve.get('cve_id')} (CVSS: {cve.get('cvss_score', 'N/A')})")
+            
+            # Send found CVEs to frontend
+            if progress_callback:
+                cve_ids = [cve.get('cve_id') for cve in unique_cves if cve.get('cve_id')]
+                progress_callback(
+                    f'Found {len(unique_cves)} CVEs for port {port}', 
+                    65, 
+                    'NVD Query',
+                    {'port': port, 'cves': cve_ids, 'stage': 'found'}
+                )
+            
+            # Track which CVEs will be filtered out
+            removed_cves = []
+            
+            # STAGE 4: AI-Enhanced False Positive Filtering (only in deep analysis mode)
+            if self.deep_analysis and self.ai_validator and unique_cves:
+                if progress_callback:
+                    progress_callback(f'AI filtering {len(unique_cves)} CVEs for port {port}', 70, 'AI Filtering')
+                print(f"\n🤖 PORT {port} - AI FILTERING:")
+                print(f"  Input: {len(unique_cves)} CVEs")
+                ai_filtered_cves = self.ai_validator.filter_and_rank_cves(unique_cves, service_data or {}, os_context)
+                if ai_filtered_cves:
+                    print(f"  Output: {len(ai_filtered_cves)} CVEs kept by AI")
+                    # Track removed CVEs with reasoning
+                    ai_filtered_ids = {cve.get('cve_id'): cve for cve in ai_filtered_cves}
+                    for cve in unique_cves:
+                        cve_id = cve.get('cve_id')
+                        if cve_id not in ai_filtered_ids:
+                            # This CVE was filtered out - add reasoning
+                            cve['filter_reason'] = cve.get('ai_reasoning', 'Filtered by AI as likely false positive or low relevance')
+                            cve['filtered_by'] = 'AI Analysis'
+                            removed_cves.append(cve)
+                            print(f"  ❌ Filtered out: {cve_id} - {cve['filter_reason'][:60]}...")
+                    unique_cves = ai_filtered_cves
+                else:
+                    print(f"  ⚠️ AI filtering returned no results, using original CVEs")
+            
             # Prioritize and filter
             filtered_cves = self._prioritize_vulnerabilities(unique_cves, service, os_context, product)
             
-            if filtered_cves:
-                # Return highest priority vulnerability
-                return self._format_nvd_vulnerability(filtered_cves[0], service, product, version, port, service_data)
+            # Track additional CVEs removed by prioritization
+            if filtered_cves and len(filtered_cves) < len(unique_cves):
+                filtered_ids = {cve.get('cve_id') for cve in filtered_cves}
+                for cve in unique_cves:
+                    if cve.get('cve_id') not in filtered_ids:
+                        # Add reasoning for prioritization filtering
+                        if 'filter_reason' not in cve:
+                            cve['filter_reason'] = 'Lower priority compared to other vulnerabilities for this service'
+                            cve['filtered_by'] = 'Prioritization'
+                        removed_cves.append(cve)
+            
+            # Send final CVEs to frontend
+            if progress_callback and filtered_cves:
+                cve_ids = [cve.get('cve_id') for cve in filtered_cves if cve.get('cve_id')]
+                progress_callback(
+                    f'Final: {len(filtered_cves)} CVEs for port {port}', 
+                    75, 
+                    'AI Filtering',
+                    {'port': port, 'cves': cve_ids, 'stage': 'final'}
+                )
+            
+            if filtered_cves or removed_cves:
+                # Return both final and filtered CVEs for consensus tracking
+                print(f"    Pass {pass_num} found {len(filtered_cves)} final, {len(removed_cves)} filtered")
+                return {'final': filtered_cves, 'filtered': removed_cves}
         
-        # Fallback to hardcoded rules
-        return self._check_hardcoded_vulnerabilities(service, product, version, port)
+        # No results from this pass
+        return {'final': [], 'filtered': []}
     
     def _build_search_keywords(self, service: str, product: str, os_context: Dict = None) -> List[str]:
         """Build context-aware search keywords for better NVD matching."""
@@ -554,6 +836,27 @@ class VulnerabilityAnalyzer:
                 'ostype': service_data.get('ostype', ''),
                 'method': service_data.get('method', 'table')
             }
+        
+        # Copy AI analysis metadata
+        metadata_copied = []
+        if 'ai_confidence' in cve_data:
+            vuln['ai_confidence'] = cve_data['ai_confidence']
+            metadata_copied.append(f"confidence={cve_data['ai_confidence']}")
+        if 'consensus_score' in cve_data:
+            vuln['consensus_score'] = cve_data['consensus_score']
+            metadata_copied.append(f"consensus={cve_data['consensus_score']}")
+        if 'ai_reasoning' in cve_data:
+            vuln['ai_reasoning'] = cve_data['ai_reasoning']
+            metadata_copied.append("reasoning")
+        if 'filter_reason' in cve_data:
+            vuln['filter_reason'] = cve_data['filter_reason']
+            metadata_copied.append("filter_reason")
+        if 'filtered_by' in cve_data:
+            vuln['filtered_by'] = cve_data['filtered_by']
+            metadata_copied.append(f"filtered_by={cve_data['filtered_by']}")
+        
+        if metadata_copied:
+            print(f"    📊 {vuln['cve']}: Copied metadata - {', '.join(metadata_copied)}")
         
         return vuln
     

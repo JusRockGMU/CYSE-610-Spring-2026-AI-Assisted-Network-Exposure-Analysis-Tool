@@ -48,28 +48,31 @@ class VulnerabilityExplainer:
 - IP: {host.get('ip', 'N/A')}
 - OS: {host.get('os', {}).get('name', 'Unknown')}
 
-**Your Task:**
-First, validate if this CVE actually applies to the detected product/version. If the version is unknown or this appears to be a false positive, note that.
+**CRITICAL: You MUST provide your response using EXACTLY these section headers in this exact order. Do not skip any section or add extra sections:**
 
-Then provide a comprehensive analysis with these sections:
+**Validation Assessment**
+Validate if this CVE actually applies to the detected product/version. If the version is unknown or this appears to be a false positive, clearly state that and explain why.
 
 **What is this vulnerability?**
-Explain in clear terms what this vulnerability is and how it works.
+Explain in clear terms what this vulnerability is and how it works. Be technical but accessible.
 
-**About this CVE**
-Provide context about when it was discovered, what systems it affects, and its severity rating.{" Note that this is in CISA's Known Exploited Vulnerabilities catalog - actively exploited in the wild!" if in_kev else ""}
+**Discovery & Timeline**
+When was this CVE discovered and published? What systems and versions does it affect?{" Note that this is in CISA's Known Exploited Vulnerabilities catalog - actively exploited in the wild!" if in_kev else ""}
 
-**Why is it dangerous?**
-Describe specific attack scenarios and what an attacker could accomplish by exploiting this vulnerability.
+**Severity Context**
+Explain the CVSS score and severity rating. Why is it rated at this level? What makes it critical/high/medium/low?
+
+**Attack Scenarios**
+Describe specific, realistic attack scenarios. What could an attacker accomplish by exploiting this vulnerability?
 
 **Recommended Fix**
-Provide actionable remediation steps with specific technical guidance.
+Provide actionable remediation steps with specific technical guidance. Include patches, workarounds, and mitigation strategies.
 
-Format your response with clear section headers and be technical but accessible. Use 2-3 sentences per section."""
+IMPORTANT: Use exactly these headers (with **header**) and provide 2-3 sentences for each section. Do not combine sections or use different headers."""
             
             response = self.anthropic_client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=1024,
+                max_tokens=1536,
                 messages=[{
                     "role": "user",
                     "content": prompt

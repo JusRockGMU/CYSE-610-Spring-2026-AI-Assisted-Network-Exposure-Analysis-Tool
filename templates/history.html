@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+
+{% block title %}Scan History - Network Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="history-header">
+        <h2>Scan History</h2>
+        <a href="/" class="btn btn-primary">+ New Scan</a>
+    </div>
+    
+    <div class="scan-filters">
+        <button class="filter-btn active" data-filter="all">All Scans</button>
+        <button class="filter-btn" data-filter="running">Running</button>
+        <button class="filter-btn" data-filter="complete">Complete</button>
+        <button class="filter-btn" data-filter="failed">Failed</button>
+    </div>
+    
+    <div class="scans-list" id="scansList">
+        <div class="loading-scans">
+            <div class="spinner"></div>
+            <p>Loading scan history...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.scan-filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.filter-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: #f8f9fa;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.filter-btn:hover {
+    background: #e9ecef;
+}
+
+.filter-btn.active {
+    background: #3498db;
+    color: white;
+}
+
+.scans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.scan-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.scan-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.scan-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.scan-id {
+    font-family: monospace;
+    color: #7f8c8d;
+    font-size: 0.85rem;
+}
+
+.scan-status {
+    padding: 0.3rem 0.8rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.scan-status.running {
+    background: #3498db20;
+    color: #3498db;
+    animation: pulse 2s infinite;
+}
+
+.scan-status.complete {
+    background: #27ae6020;
+    color: #27ae60;
+}
+
+.scan-status.failed {
+    background: #e74c3c20;
+    color: #e74c3c;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.scan-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.scan-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.scan-info-label {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.scan-info-value {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.scan-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.loading-scans {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #7f8c8d;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e9ecef;
+    border-top-color: #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #7f8c8d;
+    margin-bottom: 2rem;
+}
+</style>
+
+<script>
+let allScans = [];
+
+async function loadScans() {
+    try {
+        const response = await fetch('/api/scans');
+        const data = await response.json();
+        allScans = data.scans || [];
+        renderScans('all');
+    } catch (error) {
+        console.error('Failed to load scans:', error);
+        document.getElementById('scansList').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">⚠️</div>
+                <h3>Failed to Load Scans</h3>
+                <p>Could not retrieve scan history</p>
+            </div>
+        `;
+    }
+}
+
+function renderScans(filter) {
+    const scansList = document.getElementById('scansList');
+    
+    let filteredScans = allScans;
+    if (filter !== 'all') {
+        filteredScans = allScans.filter(scan => scan.status.toLowerCase() === filter);
+    }
+    
+    if (filteredScans.length === 0) {
+        scansList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <h3>No Scans Found</h3>
+                <p>Start a new scan to see it here</p>
+                <a href="/" class="btn btn-primary">+ New Scan</a>
+            </div>
+        `;
+        return;
+    }
+    
+    scansList.innerHTML = filteredScans.map(scan => `
+        <div class="scan-card" data-status="${scan.status.toLowerCase()}">
+            <div class="scan-card-header">
+                <span class="scan-id">ID: ${scan.scan_id}</span>
+                <span class="scan-status ${scan.status.toLowerCase()}">${scan.status}</span>
+            </div>
+            <div class="scan-info">
+                <div class="scan-info-item">
+                    <span class="scan-info-label">Started</span>
+                    <span class="scan-info-value">${formatTimestamp(scan.timestamp)}</span>
+                </div>
+                <div class="scan-info-item">
+                    <span class="scan-info-label">Files</span>
+                    <span class="scan-info-value">${scan.file_count || 1} file(s)</span>
+                </div>
+                <div class="scan-info-item">
+                    <span class="scan-info-label">Duration</span>
+                    <span class="scan-info-value">${scan.duration || 'In progress...'}</span>
+                </div>
+                ${scan.status === 'Complete' ? `
+                <div class="scan-info-item">
+                    <span class="scan-info-label">Vulnerabilities</span>
+                    <span class="scan-info-value">${scan.vuln_count || 0} found</span>
+                </div>
+                ` : ''}
+            </div>
+            <div class="scan-actions">
+                ${scan.status === 'running' ? `
+                    <button class="btn btn-primary" onclick="reconnectToScan('${scan.scan_id}')">
+                        � Monitor
+                    </button>
+                    <button class="btn btn-danger" onclick="cancelScan('${scan.scan_id}')">
+                        ⏹ Stop
+                    </button>
+                ` : scan.status === 'complete' ? `
+                    <button class="btn btn-primary" onclick="viewResults('${scan.scan_id}')">
+                        📊 Summary
+                    </button>
+                    <button class="btn btn-secondary" onclick="reconnectToScan('${scan.scan_id}')">
+                        📈 Monitor
+                    </button>
+                ` : ''}
+                <button class="btn btn-secondary" onclick="deleteScan('${scan.scan_id}')">
+                    🗑 Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
+    
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function reconnectToScan(scanId) {
+    localStorage.setItem('activeScanId', scanId);
+    window.location.href = `/monitor?scan_id=${scanId}`;
+}
+
+function viewResults(scanId) {
+    window.location.href = `/results/${scanId}`;
+}
+
+async function cancelScan(scanId) {
+    if (!confirm('Are you sure you want to stop this scan?')) return;
+    
+    try {
+        const response = await fetch(`/api/scans/${scanId}/cancel`, { method: 'POST' });
+        if (response.ok) {
+            loadScans(); // Reload to show updated status
+        } else {
+            alert('Failed to cancel scan');
+        }
+    } catch (error) {
+        console.error('Cancel error:', error);
+        alert('Failed to cancel scan');
+    }
+}
+
+async function deleteScan(scanId) {
+    if (!confirm('Are you sure you want to delete this scan and all associated data?')) return;
+    
+    try {
+        const response = await fetch(`/api/scans/${scanId}`, { method: 'DELETE' });
+        if (response.ok) {
+            // Clear sessionStorage for this scan
+            sessionStorage.removeItem(`monitor_state_${scanId}`);
+            
+            // Clear localStorage if this was the active scan
+            const activeScanId = localStorage.getItem('activeScanId');
+            if (activeScanId === scanId) {
+                localStorage.removeItem('activeScanId');
+                localStorage.removeItem('activeScanStartTime');
+            }
+            
+            // Reload to show updated list
+            loadScans();
+            
+            // Show success message
+            alert('Scan deleted successfully');
+        } else {
+            alert('Failed to delete scan');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert('Failed to delete scan');
+    }
+}
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderScans(btn.dataset.filter);
+    });
+});
+
+// Load scans on page load
+loadScans();
+
+// Auto-refresh every 5 seconds if there are running scans
+setInterval(() => {
+    if (allScans.some(scan => scan.status === 'Running')) {
+        loadScans();
+    }
+}, 5000);
+</script>
+{% endblock %}

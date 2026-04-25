@@ -10,7 +10,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, jsonify, send_file, session
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect
 from dotenv import load_dotenv
 
 from src.parser import NmapParser
@@ -33,6 +33,7 @@ app.config['ALLOWED_EXTENSIONS'] = {'xml', 'txt', 'nmap'}
 scan_results = {}
 
 # Progress tracking (scan_id -> progress_data)
+# Enhanced to include: step, percent, status (AI/NVD/Processing), timestamps, step_times
 scan_progress = {}
 
 # Cleanup old scans after 1 hour
@@ -55,37 +56,44 @@ def cleanup_old_scans():
         del scan_results[scan_id]
 
 
-def process_scan_file(file_path, use_ai=False, progress_callback=None):
+def process_scan_file(file_path, use_ai=False, deep_analysis=True, progress_callback=None):
     """Process a single scan file through the pipeline."""
-    def update_progress(step, percent):
+    
+    print("\n" + "🚀"*40)
+    print(f"APP.PY: process_scan_file() called for: {file_path}")
+    print("🚀"*40 + "\n")
+    
+    def update_progress(step, percent, status='Processing', extra_data=None):
+        """Update progress if callback provided."""
         if progress_callback:
-            progress_callback(step, percent)
+            progress_callback(step, percent, status, extra_data)
     
     parser = NmapParser()
     processor = DataProcessor()
-    analyzer = VulnerabilityAnalyzer(use_ai=use_ai)
+    analyzer = VulnerabilityAnalyzer(use_ai=use_ai, deep_analysis=deep_analysis)
     reporter = ReportGenerator()
     
     # Parse
-    update_progress('Parsing scan file', 20)
+    update_progress('Parsing scan file', 20, 'Processing')
     if file_path.endswith('.xml'):
         scan_data = parser.parse_xml(file_path)
     else:
         scan_data = parser.parse_text(file_path)
     
     # Process
-    update_progress('Processing scan data', 40)
+    update_progress('Processing scan data', 40, 'Processing')
     processed_data = processor.process(scan_data)
     
     # Analyze (this is the slow part - NVD API calls)
-    update_progress('Fetching CVE data from NVD', 50)
-    analysis_data = analyzer.analyze(processed_data)
+    # Pass progress callback to analyzer for detailed updates
+    update_progress('Starting vulnerability analysis', 50, 'Analyzing')
+    analysis_data = analyzer.analyze(processed_data, progress_callback=update_progress)
     
     # Generate web-friendly JSON
-    update_progress('Generating results', 90)
+    update_progress('Generating results', 90, 'Finalizing')
     web_data = reporter.generate_web_json(analysis_data)
     
-    update_progress('Complete', 100)
+    update_progress('Complete', 100, 'Complete')
     
     return {
         'scan_data': scan_data,
@@ -101,13 +109,163 @@ def index():
     return render_template('index.html')
 
 
-def process_files_async(scan_id, file_paths, use_ai):
+@app.route('/monitor')
+def monitor():
+    """Live scan monitor page."""
+    scan_id = request.args.get('scan_id')
+    
+    # If no scan_id provided, try to find an active scan
+    if not scan_id:
+        # Look for running scans (exclude cancelled)
+        for sid, progress in scan_progress.items():
+            status = progress.get('status')
+            percent = progress.get('percent', 0)
+            # Only show if running (not cancelled, not complete)
+            if status != 'Cancelled' and percent < 100:
+                scan_id = sid
+                break
+    
+    return render_template('monitor.html', scan_id=scan_id)
+
+
+@app.route('/summary')
+def summary():
+    """Summary page - shows most recent completed scan or allows selection."""
+    # Find most recent completed scan
+    most_recent_scan_id = None
+    most_recent_time = None
+    
+    for scan_id, result in scan_results.items():
+        timestamp = result.get('timestamp')
+        if timestamp and (most_recent_time is None or timestamp > most_recent_time):
+            most_recent_time = timestamp
+            most_recent_scan_id = scan_id
+    
+    # If we found a completed scan, redirect to its results
+    if most_recent_scan_id:
+        return redirect(f'/results/{most_recent_scan_id}')
+    
+    # Otherwise, redirect to history to select a scan
+    return redirect('/history')
+
+
+@app.route('/history')
+def history():
+    """Scan history page."""
+    return render_template('history.html')
+
+
+@app.route('/api/scans')
+def get_scans():
+    """Get all scans with their status."""
+    scans = []
+    
+    # Get all scans from progress and results
+    for scan_id in set(list(scan_progress.keys()) + list(scan_results.keys())):
+        scan_info = {
+            'scan_id': scan_id,
+            'timestamp': None,
+            'status': 'Unknown',
+            'file_count': 0,
+            'duration': None,
+            'vuln_count': 0
+        }
+        
+        # Check if scan is in progress
+        if scan_id in scan_progress:
+            progress = scan_progress[scan_id]
+            scan_info['step'] = progress.get('step', 'Unknown')
+            scan_info['percent'] = progress.get('percent', 0)
+            scan_info['file_count'] = progress.get('total_files', 1)
+            
+            # Check for explicit status first (e.g., 'Cancelled')
+            explicit_status = progress.get('status')
+            if explicit_status == 'Cancelled':
+                scan_info['status'] = 'cancelled'
+            elif progress.get('percent', 0) >= 100:
+                scan_info['status'] = 'complete'
+            else:
+                scan_info['status'] = 'running'
+            
+            elapsed = progress.get('elapsed_time', 0)
+            scan_info['duration'] = f"{elapsed:.1f}s"
+        
+        # Check if scan has results
+        if scan_id in scan_results:
+            result = scan_results[scan_id]
+            scan_info['timestamp'] = result.get('timestamp', datetime.now()).isoformat()
+            scan_info['status'] = 'Complete'
+            
+            # Count vulnerabilities
+            total_vulns = 0
+            if 'results' in result:
+                for file_result in result['results']:
+                    if 'data' in file_result and 'web_data' in file_result['data']:
+                        for host in file_result['data']['web_data'].get('hosts', []):
+                            total_vulns += len(host.get('vulnerabilities', []))
+            
+            scan_info['vuln_count'] = total_vulns
+            
+            if 'timing' in result:
+                total_time = result['timing'].get('total_time', 0)
+                scan_info['duration'] = f"{total_time:.1f}s"
+        
+        scans.append(scan_info)
+    
+    # Sort by timestamp (newest first)
+    scans.sort(key=lambda x: x['timestamp'] or '', reverse=True)
+    
+    return jsonify({'scans': scans})
+
+
+@app.route('/api/scans/<scan_id>/cancel', methods=['POST'])
+def cancel_scan(scan_id):
+    """Cancel a running scan."""
+    if scan_id in scan_progress:
+        # Mark as cancelled
+        scan_progress[scan_id]['percent'] = 100
+        scan_progress[scan_id]['step'] = 'Cancelled by user'
+        scan_progress[scan_id]['status'] = 'Cancelled'
+        return jsonify({'success': True})
+    return jsonify({'error': 'Scan not found'}), 404
+
+
+@app.route('/api/scans/<scan_id>', methods=['DELETE'])
+def delete_scan(scan_id):
+    """Delete a scan from history and all associated data."""
+    deleted = False
+    
+    # Remove from progress tracking
+    if scan_id in scan_progress:
+        del scan_progress[scan_id]
+        deleted = True
+    
+    # Remove from results
+    if scan_id in scan_results:
+        del scan_results[scan_id]
+        deleted = True
+    
+    # Delete generated report file if it exists
+    report_path = Path('reports') / f'vulnerability_report_{scan_id}.html'
+    if report_path.exists():
+        try:
+            report_path.unlink()
+            deleted = True
+        except Exception as e:
+            print(f"Failed to delete report file: {e}")
+    
+    if deleted:
+        return jsonify({'success': True})
+    return jsonify({'error': 'Scan not found'}), 404
+
+
+def process_files_async(scan_id, file_paths, use_ai, deep_analysis=True):
     """Process files asynchronously in background thread."""
     results = []
     errors = []
     
-    def update_file_progress(step, percent):
-        """Update progress for current file."""
+    def update_file_progress(step, percent, status='Processing', extra_data=None):
+        """Update progress for current file with detailed status and timing."""
         if scan_id not in scan_progress:
             return
             
@@ -119,19 +277,60 @@ def process_files_async(scan_id, file_paths, use_ai):
         file_progress = (percent / 100) * (80 / total_files)  # This file's contribution
         overall_progress = 10 + base_progress + file_progress  # Start at 10%
         
-        scan_progress[scan_id] = {
+        current_time = datetime.now()
+        last_update = scan_progress[scan_id].get('last_update', current_time)
+        step_duration = (current_time - last_update).total_seconds()
+        
+        # Track step times for display
+        if 'step_times' not in scan_progress[scan_id]:
+            scan_progress[scan_id]['step_times'] = []
+        
+        # Add step time if progress increased
+        if int(overall_progress) > scan_progress[scan_id].get('percent', 0):
+            scan_progress[scan_id]['step_times'].append({
+                'percent': int(overall_progress),
+                'duration': round(step_duration, 2),
+                'step': step,
+                'status': status
+            })
+        
+        # Handle CVE data updates
+        if extra_data and 'port' in extra_data and 'cves' in extra_data:
+            port = str(extra_data['port'])
+            cves = extra_data['cves']
+            stage = extra_data.get('stage', 'found')
+            
+            print(f"📊 CVE UPDATE: Port {port}, Stage {stage}, CVEs: {cves}, Pass: {extra_data.get('pass', 'N/A')}")
+            
+            if port not in scan_progress[scan_id]['port_cves']:
+                scan_progress[scan_id]['port_cves'][port] = {'found': [], 'final': [], 'pass': 0}
+            
+            if stage == 'found':
+                scan_progress[scan_id]['port_cves'][port]['found'] = cves
+                # Store the pass number if provided
+                if 'pass' in extra_data:
+                    scan_progress[scan_id]['port_cves'][port]['pass'] = extra_data['pass']
+                print(f"✅ Stored {len(cves)} found CVEs for port {port} (Pass {extra_data.get('pass', 'N/A')})")
+            elif stage == 'final':
+                scan_progress[scan_id]['port_cves'][port]['final'] = cves
+                print(f"✅ Stored {len(cves)} final CVEs for port {port}")
+        
+        scan_progress[scan_id].update({
             'step': f'{step} ({file_idx + 1}/{total_files})',
             'percent': int(overall_progress),
+            'status': status,
             'current_file': file_idx,
-            'total_files': total_files
-        }
+            'total_files': total_files,
+            'last_update': current_time,
+            'elapsed_time': (current_time - scan_progress[scan_id]['start_time']).total_seconds()
+        })
     
     try:
         for idx, (filename, file_path) in enumerate(file_paths):
             scan_progress[scan_id]['current_file'] = idx
             
             try:
-                result = process_scan_file(file_path, use_ai=use_ai, progress_callback=update_file_progress)
+                result = process_scan_file(file_path, use_ai=use_ai, deep_analysis=deep_analysis, progress_callback=update_file_progress)
                 results.append({
                     'filename': filename,
                     'data': result
@@ -142,18 +341,35 @@ def process_files_async(scan_id, file_paths, use_ai):
                     'error': str(e)
                 })
         
-        # Store results
+        # Store results with timing data
+        end_time = datetime.now()
+        total_time = (end_time - scan_progress[scan_id]['start_time']).total_seconds()
+        
         scan_results[scan_id] = {
             'timestamp': datetime.now(),
             'results': results,
             'errors': errors,
-            'use_ai': use_ai
+            'use_ai': use_ai,
+            'timing': {
+                'total_time': total_time,
+                'step_times': scan_progress[scan_id].get('step_times', []),
+                'total_files': scan_progress[scan_id].get('total_files', 0)
+            }
         }
         
-        scan_progress[scan_id] = {'step': 'Complete', 'percent': 100}
+        scan_progress[scan_id].update({
+            'step': 'Complete',
+            'percent': 100,
+            'status': 'Complete',
+            'elapsed_time': total_time
+        })
         
     except Exception as e:
-        scan_progress[scan_id] = {'step': f'Error: {str(e)}', 'percent': 0}
+        scan_progress[scan_id].update({
+            'step': f'Error: {str(e)}',
+            'percent': 0,
+            'status': 'Error'
+        })
 
 
 @app.route('/upload', methods=['POST'])
@@ -167,6 +383,7 @@ def upload():
     
     files = request.files.getlist('files[]')
     use_ai = request.form.get('use_ai') == 'true'
+    deep_analysis = request.form.get('deep_analysis') == 'true'
     
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
@@ -179,12 +396,20 @@ def upload():
     scan_dir = os.path.join(app.config['UPLOAD_FOLDER'], scan_id)
     os.makedirs(scan_dir, exist_ok=True)
     
-    # Initialize progress tracking
+    # Initialize progress tracking with timing
     scan_progress[scan_id] = {
         'step': 'Uploading files',
         'percent': 5,
+        'status': 'Uploading',
         'current_file': 0,
-        'total_files': len(files)
+        'total_files': 0,
+        'start_time': datetime.now(),
+        'last_update': datetime.now(),
+        'elapsed_time': 0,
+        'step_times': [],
+        'port_cves': {},  # Store CVE IDs per port for live monitoring
+        'deep_analysis': deep_analysis,  # Track if multi-pass analysis is enabled
+        'use_ai': use_ai
     }
     
     # Save files and collect paths
@@ -201,17 +426,19 @@ def upload():
         return jsonify({'error': 'No valid files uploaded'}), 400
     
     # Update progress
-    scan_progress[scan_id] = {
+    scan_progress[scan_id].update({
         'step': 'Starting analysis',
         'percent': 10,
+        'status': 'Initializing',
         'current_file': 0,
-        'total_files': len(file_paths)
-    }
+        'total_files': len(file_paths),
+        'filenames': [filename for filename, _ in file_paths]
+    })
     
     # Start async processing
     thread = threading.Thread(
         target=process_files_async,
-        args=(scan_id, file_paths, use_ai),
+        args=(scan_id, file_paths, use_ai, deep_analysis),
         daemon=True
     )
     thread.start()
@@ -223,11 +450,20 @@ def upload():
     })
 
 
+@app.route('/api/results/<scan_id>')
+def api_results(scan_id):
+    """API endpoint to get scan results data."""
+    if scan_id not in scan_results:
+        return jsonify({'error': 'Scan not found'}), 404
+    
+    return jsonify(scan_results[scan_id])
+
+
 @app.route('/results/<scan_id>')
 def results(scan_id):
     """Display scan results."""
     if scan_id not in scan_results:
-        return render_template('error.html', message='Scan not found or expired'), 404
+        return "Scan not found or still processing", 404
     
     data = scan_results[scan_id]
     return render_template('results.html', scan_id=scan_id, data=data)
@@ -250,7 +486,15 @@ def get_vulnerability_details(scan_id, host_idx, vuln_idx):
         
         # Get the specific vulnerability
         host = all_hosts[host_idx]
-        vulnerability = host['vulnerabilities'][vuln_idx]
+        
+        # Check if this is a filtered vulnerability (index >= 1000)
+        if vuln_idx >= 1000:
+            # Filtered vulnerability - subtract offset and look in filtered_vulnerabilities
+            actual_idx = vuln_idx - 1000
+            vulnerability = host.get('filtered_vulnerabilities', [])[actual_idx]
+        else:
+            # Regular vulnerability
+            vulnerability = host['vulnerabilities'][vuln_idx]
         
         # Get AI explanation if it was pre-generated
         explanation = vulnerability.get('ai_explanation')
@@ -368,16 +612,62 @@ def download_report(scan_id, format):
 
 @app.route('/api/progress/<scan_id>')
 def get_progress(scan_id):
-    """Get current progress for a scan."""
+    """Get current progress for a scan with timing information."""
     if scan_id in scan_progress:
-        return jsonify(scan_progress[scan_id])
-    return jsonify({'step': 'Unknown', 'percent': 0})
+        progress_data = scan_progress[scan_id].copy()
+        
+        # Convert datetime objects to serializable format
+        if 'start_time' in progress_data:
+            del progress_data['start_time']
+        if 'last_update' in progress_data:
+            del progress_data['last_update']
+        
+        # Round elapsed time
+        if 'elapsed_time' in progress_data:
+            progress_data['elapsed_time'] = round(progress_data['elapsed_time'], 2)
+        
+        return jsonify(progress_data)
+    return jsonify({'step': 'Unknown', 'percent': 0, 'status': 'Unknown'})
+
+
+@app.route('/status')
+def status():
+    """System status page."""
+    return render_template('status.html')
 
 
 @app.route('/health')
 def health():
-    """Health check endpoint."""
-    return jsonify({'status': 'healthy', 'active_scans': len(scan_results)})
+    """Health check endpoint with detailed system information."""
+    import sys
+    import flask
+    
+    # Check NVD availability
+    nvd_available = True
+    try:
+        from src.nvd_client import NVDClient
+        nvd_client = NVDClient()
+        nvd_available = True
+    except Exception:
+        nvd_available = False
+    
+    # Check AI availability
+    ai_available = bool(os.getenv('ANTHROPIC_API_KEY'))
+    
+    # Count scans
+    total_scans = len(set(list(scan_progress.keys()) + list(scan_results.keys())))
+    running_scans = sum(1 for scan_id in scan_progress if scan_progress[scan_id].get('percent', 0) < 100)
+    
+    return jsonify({
+        'status': 'healthy' if (nvd_available or ai_available) else 'degraded',
+        'timestamp': datetime.now().isoformat(),
+        'nvd_available': nvd_available,
+        'ai_available': ai_available,
+        'total_scans': total_scans,
+        'running_scans': running_scans,
+        'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        'flask_version': flask.__version__
+    })
 
 
 if __name__ == '__main__':

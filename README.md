@@ -12,8 +12,12 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, uses 
 
 ### **Web Interface**
 - **Modern Flask Web App** - Upload scans, view results in browser
-- **Real-Time Processing** - Async scan processing with progress tracking
+- **Live Monitor** - Real-time scan progress with per-port CVE tracking
+  - Watch CVEs progress from Pending (1/3) → Validated (2/3) → Validated (3/3)
+  - See Found/Filtered/Final counts update live
+  - Collapsible port cards with CVE details
 - **Interactive Dashboard** - Summary cards, risk scores, vulnerability tables
+- **Collapsible Vulnerability Sections** - Each CVE has 6 expandable sections
 - **AI Q&A** - Ask questions about vulnerabilities in natural language
 - **Responsive Design** - Works on desktop and mobile
 
@@ -34,11 +38,20 @@ A comprehensive vulnerability analysis tool that processes Nmap scan data, uses 
 - **Defensible** - Based on NIST, FIRST, and CISA standards
 
 ### **AI-Powered Analysis (Claude Haiku 4.5)**
-- **Vulnerability Explanations** - Technical CVEs explained in plain language
-- **Executive Summaries** - Non-technical overviews for management
+- **Multi-Pass Consensus System** - 3-pass analysis with confidence scoring
+  - High Confidence: CVE found in all 3 passes (3/3)
+  - Medium Confidence: CVE found in 2+ passes (2/3)
+  - Low Confidence: CVE found in 1 pass only (1/3) - filtered as likely false positive
+- **Real-Time Validation** - CVEs turn green when consensus (2+ passes) is reached
+- **Structured Explanations** - 6 standardized sections per vulnerability:
+  - Validation Assessment
+  - What is this vulnerability?
+  - Discovery & Timeline
+  - Severity Context
+  - Attack Scenarios
+  - Recommended Fix
 - **Interactive Q&A** - Ask questions about scan results
-- **Remediation Guides** - Step-by-step fix instructions with commands
-- **Automated Validation** - Checks if CVEs actually apply to detected versions
+- **Automated False Positive Filtering** - AI removes unlikely vulnerabilities
 
 ### **Smart Prioritization**
 - **Risk-Based Sorting** - Highest-risk hosts and vulnerabilities appear first
@@ -167,22 +180,57 @@ These demonstrate:
 User uploads Nmap scan(s) with -sV flag
          ↓
    Flask Web Server (app.py)
+   - Async processing with progress tracking
+   - Real-time CVE updates via WebSocket-style polling
          ↓
    Parser (extracts CPE, OS, services)
          ↓
    Processor (preserves CPE data)
          ↓
-   Analyzer (CPE-first, keyword-fallback)
+   ┌─────────────────────────────────────────┐
+   │  Analyzer - Multi-Pass Consensus System │
+   │  ┌─────────────────────────────────┐    │
+   │  │ Pass 1: Initial CVE Detection   │    │
+   │  │  - CPE-first matching           │    │
+   │  │  - Keyword fallback             │    │
+   │  │  - AI false positive filtering  │    │
+   │  └─────────────────────────────────┘    │
+   │              ↓                           │
+   │  ┌─────────────────────────────────┐    │
+   │  │ Pass 2: Validation Pass         │    │
+   │  │  - Re-run detection             │    │
+   │  │  - Track consensus              │    │
+   │  │  - CVEs with 2/3 → VALIDATED    │    │
+   │  └─────────────────────────────────┘    │
+   │              ↓                           │
+   │  ┌─────────────────────────────────┐    │
+   │  │ Pass 3: Final Confirmation      │    │
+   │  │  - Final consensus check        │    │
+   │  │  - Assign confidence levels     │    │
+   │  │  - Filter low-confidence CVEs   │    │
+   │  └─────────────────────────────────┘    │
+   └─────────────────────────────────────────┘
          ↓
    NVD Client (CPE queries + keyword search)
          ↓
-   Severity Recalculation (CVSS → consistent labels)
+   Confidence Assignment
+   - High: 3/3 passes
+   - Medium: 2/3 passes  
+   - Low: 1/3 passes (filtered)
          ↓
    AI Explainer (Claude Haiku 4.5)
+   - 6 standardized sections per CVE
+   - Validation assessment
+   - Remediation guidance
          ↓
    Reporter (HTML + JSON)
+   - Valid vulnerabilities (2+ pass consensus)
+   - Filtered false positives (with reasons)
          ↓
    Web Interface Display
+   - Live Monitor (real-time progress)
+   - Summary Dashboard
+   - Detailed Reports
 ```
 
 ---
@@ -192,10 +240,12 @@ User uploads Nmap scan(s) with -sV flag
 **Course**: CYSE 610 - Network Security  
 **Objective**: Demonstrate practical vulnerability analysis with modern tools  
 **Key Innovations**:
+- **Multi-Pass Consensus System** - 3-pass analysis reduces false positives through AI consensus
+- **Real-Time Validation Feedback** - Live monitor shows CVEs progressing from pending to validated
 - **CPE-based matching** - Precise vulnerability identification using industry-standard CPE
 - **Hybrid detection** - CPE-first with keyword fallback for comprehensive coverage
 - **Real-time CVE data** - No hardcoded rules, 100% NVD automation
-- **AI-enhanced accessibility** - Claude Haiku 4.5 explains technical CVEs in plain language
+- **Structured AI Explanations** - 6 standardized sections with collapsible UI for easy navigation
 - **Defensible methodology** - NIST/FIRST/CISA aligned with consistent CVSS severity labels
 
 ---

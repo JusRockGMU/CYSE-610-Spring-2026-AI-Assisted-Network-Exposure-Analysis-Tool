@@ -14,8 +14,11 @@
                 <h1>🛡️ Network Vulnerability Scanner</h1>
             </div>
             <div class="nav-links">
-                <a href="/">Home</a>
-                <a href="/health">Status</a>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">Home</a>
+                <a href="/monitor" class="{% if request.path == '/monitor' %}active{% endif %}" id="monitorNavLink">Monitor</a>
+                <a href="/summary" class="{% if request.path.startswith('/summary') or request.path.startswith('/results') %}active{% endif %}" id="summaryNavLink">Summary</a>
+                <a href="/history" class="{% if request.path == '/history' %}active{% endif %}">History</a>
+                <a href="/status" class="{% if request.path == '/status' %}active{% endif %}">Status</a>
             </div>
         </div>
     </nav>
@@ -26,10 +29,66 @@
 
     <footer class="footer">
         <div class="container">
-            <p>CYSE 610 - Network Exposure Analysis Tool</p>
+            <p>&copy; 2024 Network Vulnerability Scanner. All rights reserved.</p>
         </div>
     </footer>
-
+    
+    <script>
+        // Check if Monitor and Summary links should be disabled (global function)
+        window.checkNavAvailability = async function() {
+            const monitorLink = document.getElementById('monitorNavLink');
+            const summaryLink = document.getElementById('summaryNavLink');
+            
+            try {
+                const response = await fetch('/api/scans');
+                const data = await response.json();
+                const scans = data.scans || [];
+                
+                console.log('📊 Navigation check - scans:', scans.map(s => ({id: s.id, status: s.status})));
+                
+                // Check if there are any running scans (exclude cancelled)
+                const hasActiveScans = scans.some(scan => 
+                    (scan.status === 'running' || scan.status === 'processing') && 
+                    scan.status !== 'cancelled'
+                );
+                
+                // Check if there are any completed scans
+                const hasCompletedScans = scans.some(scan => scan.status === 'complete');
+                
+                console.log('📊 hasActiveScans:', hasActiveScans, 'hasCompletedScans:', hasCompletedScans);
+                
+                // Update Monitor link
+                if (monitorLink) {
+                    if (!hasActiveScans) {
+                        monitorLink.classList.add('disabled');
+                        monitorLink.title = 'No active scans';
+                    } else {
+                        monitorLink.classList.remove('disabled');
+                        monitorLink.title = 'View active scan';
+                    }
+                }
+                
+                // Update Summary link
+                if (summaryLink) {
+                    if (!hasCompletedScans) {
+                        summaryLink.classList.add('disabled');
+                        summaryLink.title = 'No completed scans';
+                    } else {
+                        summaryLink.classList.remove('disabled');
+                        summaryLink.title = 'View latest summary';
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to check scan status:', error);
+            }
+        };
+        
+        // Check on page load
+        window.checkNavAvailability();
+        
+        // Re-check every 5 seconds
+        setInterval(window.checkNavAvailability, 5000);
+    </script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>

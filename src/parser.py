@@ -97,12 +97,22 @@ class NmapParser:
         
         service = port_elem.find('service')
         if service is not None:
+            # Extract CPE (Common Platform Enumeration) if available
+            cpe_list = []
+            for cpe_elem in service.findall('cpe'):
+                cpe_text = cpe_elem.text
+                if cpe_text:
+                    cpe_list.append(cpe_text)
+            
             port_data['service'] = {
                 'name': service.get('name', ''),
                 'product': service.get('product', ''),
                 'version': service.get('version', ''),
                 'extrainfo': service.get('extrainfo', ''),
-                'ostype': service.get('ostype', '')
+                'ostype': service.get('ostype', ''),
+                'method': service.get('method', ''),
+                'conf': service.get('conf', ''),
+                'cpe': cpe_list  # List of CPE strings for this service
             }
         
         scripts = []
@@ -123,10 +133,20 @@ class NmapParser:
         }
         
         for osmatch in os_elem.findall('osmatch'):
-            os_data['matches'].append({
+            match_data = {
                 'name': osmatch.get('name'),
-                'accuracy': int(osmatch.get('accuracy', 0))
-            })
+                'accuracy': int(osmatch.get('accuracy', 0)),
+                'cpe': []
+            }
+            
+            # Extract CPE from osclass elements
+            for osclass in osmatch.findall('osclass'):
+                for cpe_elem in osclass.findall('cpe'):
+                    cpe_text = cpe_elem.text
+                    if cpe_text and cpe_text not in match_data['cpe']:
+                        match_data['cpe'].append(cpe_text)
+            
+            os_data['matches'].append(match_data)
         
         return os_data
     

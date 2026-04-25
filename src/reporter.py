@@ -143,6 +143,24 @@ class ReportGenerator:
             background: #27ae60;
             color: white;
         }
+        .confidence-badge {
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .confidence-badge.high {
+            background: #d4edda;
+            color: #155724;
+        }
+        .confidence-badge.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .confidence-badge.low {
+            background: #f8d7da;
+            color: #721c24;
+        }
         .vulnerability {
             background: white;
             border: 1px solid #ddd;
@@ -260,6 +278,57 @@ class ReportGenerator:
                 <div class="vulnerability">
                     <div class="vuln-header">
                         <div class="vuln-title">
+                            <span class="port-info">
+                                {% if vuln.port is iterable and vuln.port is not string %}
+                                Ports {{ vuln.port|join(', ') }}
+                                {% else %}
+                                Port {{ vuln.port }}
+                                {% endif %}
+                            </span>
+                            {{ vuln.description }}
+                        </div>
+                        <span class="cvss-score">CVSS: {{ vuln.cvss }}</span>
+                    </div>
+                    <div class="vuln-details">
+                        <strong>Service:</strong> {{ vuln.service }}
+                        {% if vuln.product %}
+                        | <strong>Product:</strong> {{ vuln.product }}
+                        {% endif %}
+                        {% if vuln.version %}
+                        {{ vuln.version }}
+                        {% endif %}
+                        <br>
+                        <strong>CVE:</strong> {{ vuln.cve }} | <strong>Severity:</strong> 
+                        <span class="risk-badge {{ vuln.severity|lower }}">{{ vuln.severity }}</span>
+                        {% if vuln.ai_confidence %}
+                        | <strong>Confidence:</strong> <span class="confidence-badge {{ vuln.ai_confidence|lower }}">{{ vuln.ai_confidence|upper }}</span>
+                        {% endif %}
+                        {% if vuln.consensus_score %}
+                        <span style="font-size: 0.9em; color: #7f8c8d;"> ({{ vuln.consensus_score }}/3 passes)</span>
+                        {% endif %}
+                    </div>
+                    {% if vuln.ai_explanation %}
+                    <div class="ai-explanation" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-left: 4px solid #3498db; border-radius: 4px;">
+                        <strong style="color: #2c3e50;">🤖 AI Analysis:</strong>
+                        <div style="margin-top: 10px; color: #2c3e50; line-height: 1.6;">{{ vuln.ai_explanation }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="vuln-recommendation">
+                        <strong>🔧 Recommendation:</strong> {{ vuln.recommendation }}
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p style="color: #27ae60; padding: 10px;">✓ No vulnerabilities detected</p>
+                {% endif %}
+                
+                {% if host.filtered_vulnerabilities %}
+                <h3 style="margin-top: 30px;">🚫 Filtered Out Vulnerabilities ({{ host.filtered_vulnerabilities|length }})</h3>
+                <p style="color: #856404; font-size: 0.9em; margin-bottom: 15px;">These vulnerabilities were found but filtered out by AI analysis as likely false positives or low relevance.</p>
+                {% for vuln in host.filtered_vulnerabilities %}
+                <div class="vulnerability" style="opacity: 0.8; background: #fff3cd;">
+                    <div class="vuln-header">
+                        <div class="vuln-title">
                             <span class="port-info">Port {{ vuln.port }}</span>
                             {{ vuln.description }}
                         </div>
@@ -276,14 +345,21 @@ class ReportGenerator:
                         <br>
                         <strong>CVE:</strong> {{ vuln.cve }} | <strong>Severity:</strong> 
                         <span class="risk-badge {{ vuln.severity|lower }}">{{ vuln.severity }}</span>
+                        {% if vuln.consensus_score %}
+                        | <strong>Consensus:</strong> <span style="font-size: 0.9em; color: #856404;">{{ vuln.consensus_score }}/3 passes</span>
+                        {% endif %}
                     </div>
-                    <div class="vuln-recommendation">
-                        <strong> Recommendation:</strong> {{ vuln.recommendation }}
+                    {% if vuln.filter_reason %}
+                    <div style="margin-top: 10px; padding: 10px; background: #fff; border-left: 3px solid #ffc107; border-radius: 3px;">
+                        <strong style="color: #856404;">🔍 Why Filtered:</strong>
+                        <div style="margin-top: 5px; color: #856404;">{{ vuln.filter_reason }}</div>
+                        {% if vuln.filtered_by %}
+                        <div style="margin-top: 5px; font-size: 0.85em; font-style: italic;">Filtered by: {{ vuln.filtered_by }}</div>
+                        {% endif %}
                     </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
-                {% else %}
-                <p style="color: #27ae60; padding: 10px;"> No vulnerabilities detected</p>
                 {% endif %}
             </div>
             {% endfor %}

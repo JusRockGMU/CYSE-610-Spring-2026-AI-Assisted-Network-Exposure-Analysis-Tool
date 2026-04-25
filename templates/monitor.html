@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Live Monitor - Network Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="monitor-header">
+        <div>
+            <h2>Live Scan Monitor</h2>
+            <p class="scan-filename" id="scanFilename" style="font-size: 1.1rem; color: #2c3e50; margin: 0.5rem 0;">
+                <strong>📄 </strong><span id="displayFilename">Loading...</span>
+            </p>
+            <p class="scan-id-display">Scan ID: <code id="displayScanId">Loading...</code></p>
+        </div>
+    </div>
+
+    <div id="noActiveScan" style="display: none;">
+        <div class="empty-state">
+            <div class="empty-state-icon">💤</div>
+            <h3>No Active Scan</h3>
+            <p>There are no scans currently running</p>
+            <a href="/" class="btn btn-primary">+ Start New Scan</a>
+        </div>
+    </div>
+
+    <div class="progress-section" id="progressSection" style="display: none;">
+        <!-- Pipeline Roadmap -->
+        <div class="pipeline-roadmap" id="pipelineRoadmap">
+            <div class="pipeline-header">
+                <h4>Analysis Pipeline</h4>
+                <span class="file-counter" id="fileCounter">File 1 of 1</span>
+            </div>
+            <div class="pipeline-steps" id="pipelineSteps">
+                <!-- Steps will be dynamically generated -->
+            </div>
+        </div>
+        
+        <!-- Live Results Panel -->
+        <div class="live-results-panel" id="liveResultsPanel" style="display: none;">
+            <div class="live-results-header">
+                <h4>🔍 Live Port Analysis</h4>
+                <div class="live-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Ports:</span>
+                        <span class="stat-value" id="totalPorts">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Found:</span>
+                        <span class="stat-value" id="totalFound">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Final:</span>
+                        <span class="stat-value final" id="totalFinal">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="live-results-content" id="liveResultsContent">
+                <div class="live-placeholder">Waiting for port discovery...</div>
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; margin-top: 20px;">
+            <p class="progress-text" id="progressText">Processing scans...</p>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span class="status-badge" id="statusBadge">Processing</span>
+                <button class="activity-log-btn" id="activityLogBtn" title="View activity log">
+                    📋 <span id="activityCount">0</span>
+                </button>
+                <button class="btn btn-danger btn-small" id="cancelScanBtn" title="Stop scan">
+                    ⏹ Stop
+                </button>
+                <span class="timer-text" id="timerText">0.0s</span>
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+            <div class="step-times" id="stepTimes"></div>
+        </div>
+        
+        <!-- Completion Section -->
+        <div class="completion-section" id="completionSection" style="display: none;">
+            <div class="completion-icon">✅</div>
+            <div class="completion-message">
+                <h3>Analysis Complete!</h3>
+                <p>Found <span id="completionVulnCount">0</span> vulnerabilities across <span id="completionHostCount">1</span> host(s)</p>
+                <button class="btn btn-primary btn-large" id="viewSummaryBtn">
+                    📊 View Detailed Summary Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Log Flyout -->
+    <div class="activity-log-flyout" id="activityLogFlyout">
+        <div class="activity-log-header">
+            <h3>Activity Log</h3>
+            <button class="close-btn" id="closeActivityLog">✕</button>
+        </div>
+        <div class="activity-log-content" id="activityLogContent">
+            <p style="color: #95a5a6; text-align: center; padding: 20px;">No activity yet...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.scan-id-display {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.scan-id-display code {
+    background: #f8f9fa;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+    color: #2c3e50;
+}
+
+.monitor-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #7f8c8d;
+    margin-bottom: 2rem;
+}
+</style>
+
+<script>
+    // Pass scan_id from backend if available
+    {% if scan_id %}
+    window.INITIAL_SCAN_ID = '{{ scan_id }}';
+    {% endif %}
+</script>
+<script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+{% endblock %}

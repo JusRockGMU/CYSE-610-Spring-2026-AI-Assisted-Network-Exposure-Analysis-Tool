@@ -13,6 +13,80 @@
         </div>
     </div>
 
+    {# Timing Summary Section #}
+    {% if data.timing %}
+    <div class="timing-summary-container">
+        <button class="timing-summary-toggle" id="timingToggle" onclick="toggleTimingSummary()">
+            <span class="toggle-icon">▼</span>
+            <span class="toggle-text">Analysis Performance Summary</span>
+            <span class="total-time">Total Time: {{ "%.1f"|format(data.timing.total_time) }}s</span>
+        </button>
+        <div class="timing-summary-content" id="timingSummaryContent">
+            <div class="timing-stats">
+                <div class="timing-stat">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Duration</div>
+                        <div class="stat-value">{{ "%.2f"|format(data.timing.total_time) }} seconds</div>
+                    </div>
+                </div>
+                <div class="timing-stat">
+                    <div class="stat-icon">📁</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Files Processed</div>
+                        <div class="stat-value">{{ data.timing.total_files }}</div>
+                    </div>
+                </div>
+                <div class="timing-stat">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Avg Time per File</div>
+                        <div class="stat-value">{{ "%.2f"|format(data.timing.total_time / data.timing.total_files if data.timing.total_files > 0 else 0) }}s</div>
+                    </div>
+                </div>
+                {% if data.use_ai %}
+                <div class="timing-stat">
+                    <div class="stat-icon">🤖</div>
+                    <div class="stat-content">
+                        <div class="stat-label">AI Enhancement</div>
+                        <div class="stat-value">Enabled</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if data.timing.step_times and data.timing.step_times|length > 0 %}
+            <div class="step-breakdown">
+                <h4>Step-by-Step Breakdown</h4>
+                <div class="step-timeline">
+                    {% for step in data.timing.step_times %}
+                    <div class="timeline-step">
+                        <div class="timeline-marker" style="left: {{ step.percent }}%" 
+                             title="{{ step.step }} ({{ step.status }})" 
+                             data-step="{{ step.step }}" 
+                             data-status="{{ step.status }}">
+                            <div class="marker-dot"></div>
+                            <div class="marker-label">{{ step.percent }}%</div>
+                            <div class="marker-tooltip">
+                                <div class="tooltip-step">{{ step.step }}</div>
+                                <div class="tooltip-status">{{ step.status }}</div>
+                            </div>
+                        </div>
+                        <div class="timeline-info">
+                            <span class="timeline-duration">{{ "%.2f"|format(step.duration) }}s</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="timeline-bar">
+                    <div class="timeline-fill" style="width: 100%"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     {# Aggregate data from all scans #}
     {% set ns = namespace(all_hosts=[], total_vulns=0, critical=0, high=0, medium=0, low=0, host_groups={}) %}
     
@@ -158,6 +232,7 @@
                             <th>Description</th>
                             <th>Port</th>
                             <th>CVSS</th>
+                            <th>Confidence</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -171,10 +246,28 @@
                                     {{ vuln.severity }}
                                 </span>
                             </td>
-                            <td class="cve-cell">{{ vuln.cve }}</td>
+                            <td class="cve-cell">
+                                {{ vuln.cve }}
+                            </td>
                             <td class="desc-cell">{{ vuln.description }}</td>
                             <td>{{ vuln.port }}</td>
                             <td class="cvss-cell">{{ vuln.cvss }}</td>
+                            <td class="confidence-cell">
+                                {% if vuln.ai_confidence %}
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                                    <span class="confidence-badge confidence-{{ vuln.ai_confidence|lower }}" title="Multi-Pass Confidence: {{ vuln.ai_confidence|capitalize }}{% if vuln.consensus_score %} ({{ vuln.consensus_score }}/3 passes){% endif %}">
+                                        {{ vuln.ai_confidence|upper }}
+                                    </span>
+                                    {% if vuln.consensus_score %}
+                                    <span style="font-size: 0.75rem; color: #7f8c8d;" title="Found in {{ vuln.consensus_score }} out of 3 analysis passes">
+                                        {{ vuln.consensus_score }}/3 passes
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span style="color: #95a5a6; font-size: 0.85rem;">N/A</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <button class="btn-expand" onclick="toggleDetails(this, {{ host_idx }}, {{ vuln_idx }})">
                                     Details ▼
@@ -182,7 +275,7 @@
                             </td>
                         </tr>
                         <tr class="vuln-details" id="details-{{ host_idx }}-{{ vuln_idx }}" style="display: none;">
-                            <td colspan="6">
+                            <td colspan="7">
                                 <div class="details-content">
                                     <div class="loading">Loading details...</div>
                                 </div>
@@ -192,6 +285,98 @@
                     </tbody>
                 </table>
             </div>
+            
+            {# Filtered/Excluded Vulnerabilities Section #}
+            {% if host.filtered_vulnerabilities and host.filtered_vulnerabilities|length > 0 %}
+            <div class="filtered-vulns-section" style="margin-top: 2rem;">
+                <details style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 1rem;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #856404;">
+                        🚫 Filtered Out Vulnerabilities ({{ host.filtered_vulnerabilities|length }}) - Click to expand
+                    </summary>
+                    <div style="margin-top: 1rem; font-size: 0.9rem; color: #856404; margin-bottom: 1rem;">
+                        These vulnerabilities were found but filtered out by AI analysis as likely false positives or low relevance.
+                    </div>
+                    <div class="vulnerabilities-table" style="margin-top: 1rem;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>CVE</th>
+                                    <th>Description</th>
+                                    <th>Port</th>
+                                    <th>CVSS</th>
+                                    <th>Confidence</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vuln in host.filtered_vulnerabilities %}
+                                {% set vuln_idx = loop.index0 + 1000 %}  {# Offset to avoid ID conflicts #}
+                                <tr class="vuln-row" style="opacity: 0.7;">
+                                    <td>
+                                        <span class="severity-badge {{ vuln.severity|lower }}">
+                                            {{ vuln.severity|upper }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="cve-cell">
+                                            <span class="cve-id">{{ vuln.cve }}</span>
+                                            {% if vuln.in_kev %}
+                                            <span class="kev-badge" title="In CISA Known Exploited Vulnerabilities catalog">⚠️ KEV</span>
+                                            {% endif %}
+                                            {% if vuln.consensus_score is defined %}
+                                            <span style="font-size: 0.7rem; color: #856404; margin-left: 0.25rem;" title="Consensus: {{ vuln.consensus_score }}/3 passes">
+                                                📊 {{ vuln.consensus_score }}/3
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        {% if vuln.filter_reason %}
+                                        <div style="font-size: 0.75rem; color: #856404; margin-top: 0.5rem; padding: 0.5rem; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 3px;">
+                                            <strong>🔍 Why Filtered:</strong><br>
+                                            {{ vuln.filter_reason }}
+                                        </div>
+                                        {% endif %}
+                                        {% if vuln.filtered_by %}
+                                        <div style="font-size: 0.7rem; color: #856404; margin-top: 0.25rem;">
+                                            <em>Filtered by: {{ vuln.filtered_by }}</em>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="description-cell">{{ vuln.description[:150] }}...</td>
+                                    <td>{{ vuln.port }}</td>
+                                    <td>
+                                        <span class="cvss-score">{{ "%.1f"|format(vuln.cvss) }}</span>
+                                    </td>
+                                    <td class="confidence-cell">
+                                        <span class="confidence-badge confidence-filtered" title="Filtered as likely false positive">
+                                            FILTERED
+                                        </span>
+                                        {% if vuln.consensus_score is defined and vuln.consensus_score > 0 %}
+                                        <div style="font-size: 0.75rem; color: #856404; margin-top: 0.25rem;">
+                                            {{ vuln.consensus_score }}/3 passes
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="details-btn" onclick="toggleDetails(this, {{ host_idx }}, {{ vuln_idx }})">
+                                            Details ▼
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="vuln-details" id="details-{{ host_idx }}-{{ vuln_idx }}" style="display: none;">
+                                    <td colspan="7">
+                                        <div class="details-content">
+                                            <div class="loading">Loading details...</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+            {% endif %}
         </div>
             {% endfor %}
         {% endfor %}
@@ -229,13 +414,9 @@ async function loadVulnerabilityDetails(hostIdx, vulnIdx) {
         if (response.ok) {
             let html = '';
             
-            // AI Explanation as primary content
+            // AI Explanation as primary content with collapsible sections
             if (data.explanation) {
-                html += `
-                    <div class="vuln-detail-section ai-explanation-primary">
-                        <div class="explanation-content">${formatMarkdown(data.explanation)}</div>
-                    </div>
-                `;
+                html += formatExplanationSections(data.explanation, hostIdx, vulnIdx);
             } else {
                 // Fallback if no AI explanation
                 html += `
@@ -396,6 +577,60 @@ function formatMarkdown(text) {
     return html;
 }
 
+function formatExplanationSections(explanation, hostIdx, vulnIdx) {
+    // Parse explanation into sections based on headers
+    const sections = [];
+    const lines = explanation.split('\n');
+    let currentSection = null;
+    
+    for (const line of lines) {
+        // Check if line is a section header (starts with **)
+        const headerMatch = line.match(/^\*\*(.+?)\*\*$/);
+        if (headerMatch) {
+            // Save previous section if exists
+            if (currentSection) {
+                sections.push(currentSection);
+            }
+            // Start new section
+            currentSection = {
+                title: headerMatch[1].trim(),
+                content: []
+            };
+        } else if (currentSection && line.trim()) {
+            // Add content to current section
+            currentSection.content.push(line);
+        }
+    }
+    
+    // Add last section
+    if (currentSection) {
+        sections.push(currentSection);
+    }
+    
+    // Generate HTML with collapsible sections
+    let html = '<div class="ai-explanation-primary">';
+    
+    sections.forEach((section, idx) => {
+        const sectionId = `section-${hostIdx}-${vulnIdx}-${idx}`;
+        const isOpen = idx === 0; // First section open by default
+        
+        html += `
+            <details class="explanation-section" ${isOpen ? 'open' : ''}>
+                <summary class="explanation-section-header">
+                    <span class="section-icon">${isOpen ? '▼' : '▶'}</span>
+                    <span class="section-title">${section.title}</span>
+                </summary>
+                <div class="explanation-section-content">
+                    ${formatMarkdown(section.content.join('\n'))}
+                </div>
+            </details>
+        `;
+    });
+    
+    html += '</div>';
+    return html;
+}
+
 function toggleTechnicalDetails(hostIdx, vulnIdx) {
     const detailsDiv = document.getElementById(`tech-details-${hostIdx}-${vulnIdx}`);
     const button = event.target;
@@ -489,6 +724,14 @@ async function askQuestion() {
 
 function downloadReport(format) {
     window.location.href = `/download/${scanId}/${format}`;
+}
+
+function toggleTimingSummary() {
+    const toggle = document.getElementById('timingToggle');
+    const content = document.getElementById('timingSummaryContent');
+    
+    toggle.classList.toggle('open');
+    content.classList.toggle('open');
 }
 
 // Allow Enter key to submit question

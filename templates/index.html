@@ -20,7 +20,11 @@
         <div class="options">
             <label class="checkbox-label">
                 <input type="checkbox" id="useAI" checked>
-                <span>Enable enhanced analysis (recommended)</span>
+                <span>Enable AI-enhanced analysis (recommended)</span>
+            </label>
+            <label class="checkbox-label" id="deepAnalysisOption" style="margin-top: 0.5rem;">
+                <input type="checkbox" id="useDeepAnalysis" checked>
+                <span>Deep analysis mode (iterative refinement - slower but more accurate)</span>
             </label>
         </div>
 
@@ -29,10 +33,81 @@
         </button>
 
         <div class="progress-section" id="progressSection" style="display: none;">
+            <!-- Pipeline Roadmap -->
+            <div class="pipeline-roadmap" id="pipelineRoadmap">
+                <div class="pipeline-header">
+                    <h4>Analysis Pipeline</h4>
+                    <span class="file-counter" id="fileCounter">File 1 of 1</span>
+                </div>
+                <div class="pipeline-steps" id="pipelineSteps">
+                    <!-- Steps will be dynamically generated -->
+                </div>
+            </div>
+            
+            <!-- Live Results Panel -->
+            <div class="live-results-panel" id="liveResultsPanel" style="display: none;">
+                <div class="live-results-header">
+                    <h4>🔍 Live Port Analysis</h4>
+                    <div class="live-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Ports:</span>
+                            <span class="stat-value" id="totalPorts">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Found:</span>
+                            <span class="stat-value" id="totalFound">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Final:</span>
+                            <span class="stat-value final" id="totalFinal">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="live-results-content" id="liveResultsContent">
+                    <div class="live-placeholder">Waiting for port discovery...</div>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; margin-top: 20px;">
+                <p class="progress-text" id="progressText">Processing scans...</p>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="status-badge" id="statusBadge">Processing</span>
+                    <button class="activity-log-btn" id="activityLogBtn" title="View activity log">
+                        📋 <span id="activityCount">0</span>
+                    </button>
+                    <button class="btn btn-danger btn-small" id="cancelScanBtn" title="Stop scan">
+                        ⏹ Stop
+                    </button>
+                    <span class="timer-text" id="timerText">0.0s</span>
+                </div>
+            </div>
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
+                <div class="step-times" id="stepTimes"></div>
             </div>
-            <p class="progress-text" id="progressText">Processing scans...</p>
+            
+            <!-- Completion Section -->
+            <div class="completion-section" id="completionSection" style="display: none;">
+                <div class="completion-message">
+                    <div class="completion-icon">✅</div>
+                    <h3>Analysis Complete!</h3>
+                    <p>Found <span id="completionVulnCount">0</span> vulnerabilities across <span id="completionHostCount">0</span> host(s)</p>
+                </div>
+                <button class="btn btn-primary btn-large" id="viewSummaryBtn">
+                    📊 View Detailed Summary Report
+                </button>
+            </div>
+            
+            <!-- Activity Log Flyout -->
+            <div class="activity-log-flyout" id="activityLogFlyout">
+                <div class="activity-log-header">
+                    <h4>Activity Log</h4>
+                    <button class="close-btn" id="closeActivityLog">✕</button>
+                </div>
+                <div class="activity-log-content" id="activityLogContent">
+                    <p style="color: #95a5a6; text-align: center; padding: 20px;">No activity yet...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -75,6 +150,22 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 
 let selectedFiles = [];
+
+// Deep analysis option control
+const useAICheckbox = document.getElementById('useAI');
+const deepAnalysisOption = document.getElementById('deepAnalysisOption');
+const useDeepAnalysisCheckbox = document.getElementById('useDeepAnalysis');
+
+useAICheckbox.addEventListener('change', () => {
+    if (!useAICheckbox.checked) {
+        useDeepAnalysisCheckbox.checked = false;
+        useDeepAnalysisCheckbox.disabled = true;
+        deepAnalysisOption.style.opacity = '0.5';
+    } else {
+        useDeepAnalysisCheckbox.disabled = false;
+        deepAnalysisOption.style.opacity = '1';
+    }
+});
 
 // Click to browse
 uploadBox.addEventListener('click', () => fileInput.click());
@@ -141,6 +232,7 @@ uploadBtn.addEventListener('click', async () => {
         formData.append('files[]', file);
     });
     formData.append('use_ai', document.getElementById('useAI').checked);
+    formData.append('deep_analysis', document.getElementById('useDeepAnalysis').checked);
 
     uploadBtn.disabled = true;
     progressSection.style.display = 'block';
@@ -164,25 +256,543 @@ uploadBtn.addEventListener('click', async () => {
         if (response.ok) {
             scanId = result.scan_id;
             
+            // Store scan ID in localStorage for persistence
+            localStorage.setItem('activeScanId', scanId);
+            localStorage.setItem('activeScanStartTime', Date.now());
+            
+            // Redirect to monitor page
+            window.location.href = `/monitor?scan_id=${scanId}`;
+            return; // Stop here, monitor page will handle the rest
+            
             // Start polling immediately for real-time progress
+            const statusBadge = document.getElementById('statusBadge');
+            const timerText = document.getElementById('timerText');
+            const stepTimes = document.getElementById('stepTimes');
+            const activityLogBtn = document.getElementById('activityLogBtn');
+            const activityLogFlyout = document.getElementById('activityLogFlyout');
+            const closeActivityLog = document.getElementById('closeActivityLog');
+            const activityLogContent = document.getElementById('activityLogContent');
+            const activityCount = document.getElementById('activityCount');
+            const cancelScanBtn = document.getElementById('cancelScanBtn');
+            
+            let activityHistory = [];
+            let lastStep = '';
+            
+            // Initialize pipeline roadmap
+            const pipelineSteps = document.getElementById('pipelineSteps');
+            const fileCounter = document.getElementById('fileCounter');
+            
+            const pipeline = [
+                { id: 'upload', icon: '📤', title: 'Upload Files', description: 'Receiving scan files' },
+                { id: 'parse', icon: '📋', title: 'Parse Scan Data', description: 'Extracting host and service information' },
+                { id: 'process', icon: '⚙️', title: 'Process Data', description: 'Normalizing and structuring data' },
+                { id: 'ai-enhance', icon: '🤖', title: 'AI Enhancement', description: 'Validating CPE and generating keywords', aiStep: true },
+                { id: 'nvd-query', icon: '🔍', title: 'Query NVD Database', description: 'Searching for CVEs' },
+                { id: 'ai-filter', icon: '🎯', title: 'AI Filtering', description: 'Removing false positives', aiStep: true },
+                { id: 'generate', icon: '📊', title: 'Generate Report', description: 'Creating vulnerability report' },
+                { id: 'complete', icon: '✅', title: 'Complete', description: 'Analysis finished' }
+            ];
+            
+            function initializePipeline() {
+                pipelineSteps.innerHTML = pipeline.map(step => `
+                    <div class="pipeline-step pending" id="step-${step.id}">
+                        <div class="step-icon">${step.icon}</div>
+                        <div class="step-content">
+                            <div class="step-title">${step.title}</div>
+                            <div class="step-description">${step.description}</div>
+                        </div>
+                        <div class="step-status">
+                            <span class="step-time" id="time-${step.id}">--</span>
+                            <div class="step-check">○</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            function updatePipelineStep(stepId, state, time) {
+                const stepEl = document.getElementById(`step-${stepId}`);
+                const timeEl = document.getElementById(`time-${stepId}`);
+                const checkEl = stepEl.querySelector('.step-check');
+                
+                if (!stepEl) return;
+                
+                // Remove all state classes
+                stepEl.classList.remove('pending', 'active', 'completed', 'ai-active');
+                
+                // Add new state
+                stepEl.classList.add(state);
+                
+                // Update check mark
+                if (state === 'completed') {
+                    checkEl.textContent = '✓';
+                } else if (state === 'active' || state === 'ai-active') {
+                    checkEl.textContent = '⟳';
+                }
+                
+                // Update time
+                if (time) {
+                    timeEl.textContent = time + 's';
+                }
+            }
+            
+            function matchStepToProgress(progressStep, status) {
+                const stepLower = progressStep.toLowerCase();
+                
+                // Upload phase
+                if (stepLower.includes('upload')) {
+                    return 'upload';
+                }
+                // Parse phase
+                else if (stepLower.includes('pars')) {
+                    return 'parse';
+                }
+                // Process phase
+                else if (stepLower.includes('process')) {
+                    return 'process';
+                }
+                // AI Enhancement
+                else if (stepLower.includes('ai enhancing') || stepLower.includes('ai enhancement') || status === 'AI Processing') {
+                    return 'ai-enhance';
+                }
+                // NVD Query
+                else if (stepLower.includes('nvd') || stepLower.includes('querying') || stepLower.includes('fetching cve') || status === 'NVD Query') {
+                    return 'nvd-query';
+                }
+                // AI Filtering
+                else if (stepLower.includes('ai filter') || status === 'AI Filtering') {
+                    return 'ai-filter';
+                }
+                // Generate
+                else if (stepLower.includes('generat')) {
+                    return 'generate';
+                }
+                // Complete
+                else if (stepLower.includes('complete') || status === 'Complete') {
+                    return 'complete';
+                }
+                // Analyzing (general)
+                else if (stepLower.includes('analyz')) {
+                    return 'nvd-query';
+                }
+                
+                return null;
+            }
+            
+            // Initialize pipeline
+            initializePipeline();
+            
+            // Activity log button click handler
+            activityLogBtn.addEventListener('click', () => {
+                activityLogFlyout.classList.toggle('open');
+            });
+            
+            closeActivityLog.addEventListener('click', () => {
+                activityLogFlyout.classList.remove('open');
+            });
+            
+            cancelScanBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to stop this scan?')) return;
+                
+                try {
+                    const response = await fetch(`/api/scans/${scanId}/cancel`, { method: 'POST' });
+                    if (response.ok) {
+                        stopLiveTimer();
+                        clearInterval(progressInterval);
+                        alert('Scan cancelled successfully');
+                        window.location.href = '/';
+                    } else {
+                        alert('Failed to cancel scan');
+                    }
+                } catch (error) {
+                    console.error('Cancel error:', error);
+                    alert('Failed to cancel scan');
+                }
+            });
+            
+            // Close on outside click
+            activityLogFlyout.addEventListener('click', (e) => {
+                if (e.target === activityLogFlyout) {
+                    activityLogFlyout.classList.remove('open');
+                }
+            });
+            
+            function updateActivityLog() {
+                if (activityHistory.length === 0) {
+                    activityLogContent.innerHTML = '<p style="color: #95a5a6; text-align: center; padding: 20px;">No activity yet...</p>';
+                    return;
+                }
+                
+                let html = '';
+                
+                // Add pass metrics summary at top if we have multi-pass data
+                if (passMetrics.length > 0) {
+                    html += '<div class="pass-metrics-summary">';
+                    html += '<h4 style="margin: 0 0 1rem 0; color: #2c3e50; font-size: 0.9rem;">📊 Multi-Pass Analysis Summary</h4>';
+                    passMetrics.forEach((metric, idx) => {
+                        html += `
+                            <div class="pass-metric-item">
+                                <div class="pass-metric-header">
+                                    <span class="pass-badge">Pass ${idx + 1}</span>
+                                    <span class="pass-port">${metric.port || 'Unknown'}</span>
+                                </div>
+                                <div class="pass-metric-details">
+                                    <span>🎯 ${metric.cves_found || 0} CVEs found</span>
+                                    <span>⏱ ${metric.duration}s</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div><div style="border-top: 2px solid #e9ecef; margin: 1rem 0;"></div>';
+                }
+                
+                // Add activity history
+                html += activityHistory.map((activity, index) => {
+                    const statusClass = activity.status.toLowerCase().replace(/ /g, '-');
+                    const statusColors = {
+                        'ai-processing': '#3498db',
+                        'nvd-query': '#f39c12',
+                        'ai-filtering': '#16a085',
+                        'analyzing': '#8e44ad',
+                        'complete': '#27ae60',
+                        'processing': '#95a5a6'
+                    };
+                    const color = statusColors[statusClass] || '#95a5a6';
+                    
+                    return `
+                        <div class="activity-item ${statusClass}">
+                            <div class="activity-timestamp">${activity.timestamp}</div>
+                            <div class="activity-step">${activity.step}</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="activity-status" style="background: ${color}20; color: ${color};">
+                                    ${activity.status}
+                                </span>
+                                <span class="activity-duration">⏱ ${activity.duration}s</span>
+                            </div>
+                        </div>
+                    `;
+                }).reverse().join('');
+                
+                activityLogContent.innerHTML = html;
+            }
+            
+            let currentPipelineStep = null;
+            let completedSteps = new Set();
+            let stepStartTime = null;
+            let liveTimerInterval = null;
+            let stepPassCounts = {}; // Track how many times each step has been visited
+            let passHistory = []; // Track all passes with their details
+            let passMetrics = []; // Track metrics for each pass (vulns found, etc.)
+            let portAnalysis = {}; // Track per-port analysis: {port: {found: 0, filtered: 0, final: 0, status: 'analyzing'}}
+            let discoveredPorts = []; // List of all ports found in scan
+            let totalFound = 0;
+            let totalFiltered = 0;
+            let totalFinal = 0;
+            let lastProcessedStep = null; // Track last step we processed to avoid duplicate processing
+            let currentPass = 1; // Track which full pass we're on
+            
+            function startLiveTimer(stepId) {
+                // Clear any existing timer
+                if (liveTimerInterval) {
+                    clearInterval(liveTimerInterval);
+                }
+                
+                stepStartTime = Date.now();
+                
+                // Update timer every 100ms for smooth counting
+                liveTimerInterval = setInterval(() => {
+                    const timeEl = document.getElementById(`time-${stepId}`);
+                    if (timeEl) {
+                        const elapsed = (Date.now() - stepStartTime) / 1000;
+                        timeEl.textContent = elapsed.toFixed(1) + 's';
+                    }
+                }, 100);
+            }
+            
+            function stopLiveTimer() {
+                if (liveTimerInterval) {
+                    clearInterval(liveTimerInterval);
+                    liveTimerInterval = null;
+                }
+            }
+            
+            function updateLivePortAnalysis() {
+                const content = document.getElementById('liveResultsContent');
+                
+                if (discoveredPorts.length === 0) {
+                    content.innerHTML = `
+                        <div class="live-placeholder">
+                            <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
+                            <div style="font-weight: 600; margin-bottom: 0.5rem;">Discovering Ports...</div>
+                            <div style="font-size: 0.9rem;">Parsing XML scan data</div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Update header stats
+                document.getElementById('totalPorts').textContent = discoveredPorts.length;
+                document.getElementById('totalFound').textContent = totalFound;
+                document.getElementById('totalFinal').textContent = totalFinal;
+                
+                // Build port cards
+                let html = '';
+                discoveredPorts.forEach(port => {
+                    const analysis = portAnalysis[port] || {found: 0, filtered: 0, final: 0, status: 'pending'};
+                    const statusClass = analysis.status === 'complete' ? 'complete' : 
+                                       analysis.status === 'analyzing' ? 'analyzing' : 'pending';
+                    
+                    html += `
+                        <div class="port-card ${statusClass}">
+                            <div class="port-header">
+                                <div class="port-number">Port ${port}</div>
+                                <div class="port-status-badge ${statusClass}">
+                                    ${analysis.status === 'complete' ? '✓' : 
+                                      analysis.status === 'analyzing' ? '⏳' : '⏸'}
+                                    ${analysis.status}
+                                </div>
+                            </div>
+                            <div class="port-stats">
+                                <div class="port-stat">
+                                    <span class="port-stat-label">Found</span>
+                                    <span class="port-stat-value">${analysis.found}</span>
+                                </div>
+                                <div class="port-stat-arrow">→</div>
+                                <div class="port-stat">
+                                    <span class="port-stat-label">Filtered</span>
+                                    <span class="port-stat-value filtered">${analysis.filtered}</span>
+                                </div>
+                                <div class="port-stat-arrow">→</div>
+                                <div class="port-stat">
+                                    <span class="port-stat-label">Final</span>
+                                    <span class="port-stat-value final">${analysis.final}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content.innerHTML = html;
+            }
+            
             progressInterval = setInterval(async () => {
                 try {
                     const progressResponse = await fetch(`/api/progress/${scanId}`);
                     const progressData = await progressResponse.json();
                     
-                    // Update UI with real progress
+                    // Update progress bar
                     progressFill.style.width = progressData.percent + '%';
                     progressText.textContent = progressData.step;
                     
-                    // If complete, redirect to results
+                    // Update status badge
+                    const status = progressData.status || 'Processing';
+                    statusBadge.textContent = status;
+                    statusBadge.className = 'status-badge ' + status.toLowerCase().replace(/ /g, '-');
+                    
+                    // Update timer
+                    if (progressData.elapsed_time !== undefined) {
+                        timerText.textContent = progressData.elapsed_time.toFixed(1) + 's';
+                    }
+                    
+                    // Update file counter
+                    if (progressData.current_file !== undefined && progressData.total_files !== undefined) {
+                        fileCounter.textContent = `File ${progressData.current_file + 1} of ${progressData.total_files}`;
+                    }
+                    
+                    // Show live results panel after parsing completes
+                    const liveResultsPanel = document.getElementById('liveResultsPanel');
+                    
+                    // Extract port discovery from parsing step (e.g., "Extracted 3 hosts and 5 ports")
+                    const portsDiscoveredMatch = progressData.step.match(/(\d+)\s+ports?/i);
+                    if (portsDiscoveredMatch && discoveredPorts.length === 0) {
+                        // Show panel immediately when ports are discovered
+                        liveResultsPanel.style.display = 'block';
+                        updateLivePortAnalysis(); // Show "Waiting for port discovery..."
+                    }
+                    
+                    // Extract specific port numbers from progress messages
+                    const portMatch = progressData.step.match(/port (\d+)/i);
+                    if (portMatch) {
+                        const port = portMatch[1];
+                        
+                        // Show panel if not already visible
+                        if (liveResultsPanel.style.display === 'none') {
+                            liveResultsPanel.style.display = 'block';
+                        }
+                        
+                        // Add to discovered ports if new
+                        if (!discoveredPorts.includes(port)) {
+                            discoveredPorts.push(port);
+                            discoveredPorts.sort((a, b) => parseInt(a) - parseInt(b)); // Sort numerically
+                            portAnalysis[port] = {found: 0, filtered: 0, final: 0, status: 'pending'};
+                        }
+                        
+                        // Update port status based on current step
+                        if (status === 'NVD Query' || progressData.step.includes('Querying NVD')) {
+                            portAnalysis[port].status = 'analyzing';
+                        } else if (status === 'AI Processing' || progressData.step.includes('enhancing')) {
+                            portAnalysis[port].status = 'analyzing';
+                        } else if (status === 'AI Filtering' || progressData.step.includes('filtering')) {
+                            portAnalysis[port].status = 'analyzing';
+                        }
+                        
+                        // Extract CVE counts
+                        const cvesMatch = progressData.step.match(/(\d+) CVEs/);
+                        if (cvesMatch) {
+                            const cveCount = parseInt(cvesMatch[1]);
+                            
+                            if (progressData.step.includes('found') || progressData.step.includes('Querying')) {
+                                portAnalysis[port].found = cveCount;
+                                totalFound = Object.values(portAnalysis).reduce((sum, p) => sum + p.found, 0);
+                            } else if (progressData.step.includes('filtering')) {
+                                // The count in "filtering X CVEs" is what remains after filtering
+                                portAnalysis[port].final = cveCount;
+                                portAnalysis[port].filtered = portAnalysis[port].found - cveCount;
+                                portAnalysis[port].status = 'complete';
+                                totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
+                            }
+                        }
+                        
+                        updateLivePortAnalysis();
+                    }
+                    
+                    // Update pipeline roadmap
+                    const matchedStep = matchStepToProgress(progressData.step, status);
+                    if (matchedStep) {
+                        // Only process if this is a NEW step (not just a poll update)
+                        const stepKey = `${matchedStep}-${progressData.step}`; // Include full step text to detect port changes
+                        const isNewStep = lastProcessedStep !== stepKey;
+                        
+                        if (isNewStep) {
+                            lastProcessedStep = stepKey;
+                            
+                            // Mark previous steps as completed
+                            const stepIndex = pipeline.findIndex(s => s.id === matchedStep);
+                            for (let i = 0; i < stepIndex; i++) {
+                                if (!completedSteps.has(pipeline[i].id)) {
+                                    updatePipelineStep(pipeline[i].id, 'completed', progressData.elapsed_time.toFixed(1));
+                                    completedSteps.add(pipeline[i].id);
+                                }
+                            }
+                        }
+                        
+                        // Update current step (only when actually changing steps)
+                        if (currentPipelineStep !== matchedStep) {
+                            // Check if we're revisiting a step (multi-pass iteration)
+                            const isRevisit = completedSteps.has(matchedStep);
+                            
+                            // Mark old step as completed and stop its timer
+                            if (currentPipelineStep) {
+                                stopLiveTimer();
+                                const finalTime = progressData.elapsed_time.toFixed(1);
+                                updatePipelineStep(currentPipelineStep, 'completed', finalTime);
+                                
+                                // Don't add to completedSteps yet if we might revisit
+                                // Only mark as truly complete if moving forward
+                                if (!isRevisit) {
+                                    completedSteps.add(currentPipelineStep);
+                                }
+                            }
+                            
+                            // Track pass metrics when we see port-specific steps (multi-port analysis)
+                            // Only track for AI filtering which is the end of each port's analysis
+                            if (matchedStep === 'ai-filter' && progressData.step.includes('port')) {
+                                const portMatch = progressData.step.match(/port (\d+)/);
+                                const cvesMatch = progressData.step.match(/(\d+) CVEs/);
+                                
+                                if (portMatch) {
+                                    const port = portMatch[1];
+                                    const passNumber = passMetrics.length + 1;
+                                    
+                                    passMetrics.push({
+                                        pass: passNumber,
+                                        port: port,
+                                        cves_found: cvesMatch ? parseInt(cvesMatch[1]) : 0,
+                                        duration: progressData.elapsed_time.toFixed(1),
+                                        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false })
+                                    });
+                                    
+                                    // Show pass indicator only if this is 2nd+ port
+                                    if (passNumber > 1) {
+                                        const stepEl = document.getElementById(`step-${matchedStep}`);
+                                        if (stepEl) {
+                                            let passIndicator = stepEl.querySelector('.pass-indicator');
+                                            if (!passIndicator) {
+                                                passIndicator = document.createElement('div');
+                                                passIndicator.className = 'pass-indicator';
+                                                stepEl.querySelector('.step-content').appendChild(passIndicator);
+                                            }
+                                            passIndicator.textContent = `Port ${passNumber}`;
+                                        }
+                                    }
+                                    
+                                    updateActivityLog(); // Refresh to show new metrics
+                                }
+                            }
+                            
+                            // Set new current step and start live timer
+                            currentPipelineStep = matchedStep;
+                            const stepInfo = pipeline.find(s => s.id === matchedStep);
+                            const state = stepInfo && stepInfo.aiStep ? 'ai-active' : 'active';
+                            updatePipelineStep(matchedStep, state, progressData.elapsed_time.toFixed(1));
+                            startLiveTimer(matchedStep);
+                        }
+                        // Note: We don't update time here anymore - the live timer handles it
+                    }
+                    
+                    // Track activity history (only add if step changed)
+                    if (progressData.step !== lastStep) {
+                        const now = new Date();
+                        const timestamp = now.toLocaleTimeString('en-US', { hour12: false });
+                        
+                        activityHistory.push({
+                            timestamp: timestamp,
+                            step: progressData.step,
+                            status: status,
+                            duration: progressData.elapsed_time ? progressData.elapsed_time.toFixed(1) : '0.0',
+                            percent: progressData.percent
+                        });
+                        
+                        lastStep = progressData.step;
+                        activityCount.textContent = activityHistory.length;
+                        updateActivityLog();
+                    }
+                    
+                    // Update step time markers
+                    if (progressData.step_times && progressData.step_times.length > 0) {
+                        stepTimes.innerHTML = '';
+                        progressData.step_times.forEach(step => {
+                            const marker = document.createElement('div');
+                            marker.className = 'step-time-marker';
+                            marker.style.left = step.percent + '%';
+                            marker.textContent = step.duration + 's';
+                            stepTimes.appendChild(marker);
+                        });
+                    }
+                    
+                    // If complete, show completion section with summary button
                     if (progressData.percent >= 100) {
+                        stopLiveTimer();
                         clearInterval(progressInterval);
-                        setTimeout(() => {
+                        
+                        // Show completion section
+                        const completionSection = document.getElementById('completionSection');
+                        const viewSummaryBtn = document.getElementById('viewSummaryBtn');
+                        
+                        completionSection.style.display = 'block';
+                        
+                        // Set up summary button click handler
+                        viewSummaryBtn.onclick = () => {
                             window.location.href = `/results/${scanId}`;
-                        }, 500);
+                        };
+                        
+                        // Update completion stats (will be populated from live results)
+                        document.getElementById('completionVulnCount').textContent = totalFinal;
+                        document.getElementById('completionHostCount').textContent = '1'; // TODO: track actual host count
                     }
                 } catch (err) {
                     console.error('Progress poll error:', err);
+                    console.error('Error details:', err.message, err.stack);
+                    // Don't stop polling on errors - might be temporary
                 }
             }, 300); // Poll every 300ms for faster updates
         } else {
