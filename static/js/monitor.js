@@ -472,7 +472,8 @@ function initializeMonitoring(scanId) {
         discoveredPorts.forEach(port => {
             const analysis = portAnalysis[port] || {found: 0, filtered: 0, final: 0, status: 'pending'};
             const statusClass = analysis.status === 'complete' ? 'complete' : 
-                               analysis.status === 'analyzing' ? 'analyzing' : 'pending';
+                               analysis.status === 'analyzing' ? 'analyzing' : 
+                               analysis.status === 'waiting' ? 'waiting' : 'pending';
             
             const hasCVEs = analysis.cves && analysis.cves.length > 0;
             const isExpanded = portCollapseState[port] === true; // Default collapsed
@@ -486,8 +487,9 @@ function initializeMonitoring(scanId) {
                         </div>
                         <div class="port-status-badge ${statusClass}">
                             ${analysis.status === 'complete' ? '✓' : 
-                              analysis.status === 'analyzing' ? '⏳' : '⏸'}
-                            ${analysis.status}
+                              analysis.status === 'analyzing' ? '⏳' : 
+                              analysis.status === 'waiting' ? '⏸' : '⏸'}
+                            ${analysis.status === 'waiting' ? 'Waiting' : analysis.status}
                         </div>
                     </div>
                     <div class="port-stats">
@@ -623,6 +625,25 @@ function initializeMonitoring(scanId) {
                 }
             }
             
+            // Pre-build all port cards when we receive discovered_ports
+            if (progressData.discovered_ports && progressData.discovered_ports.length > 0) {
+                console.log(`📋 Pre-building ${progressData.discovered_ports.length} port cards:`, progressData.discovered_ports);
+                progressData.discovered_ports.forEach(port => {
+                    if (!discoveredPorts.includes(port)) {
+                        discoveredPorts.push(port);
+                        portAnalysis[port] = {
+                            found: 0, 
+                            filtered: 0, 
+                            final: 0, 
+                            status: 'waiting',  // New status: waiting for analysis
+                            cves: []
+                        };
+                    }
+                });
+                discoveredPorts.sort((a, b) => parseInt(a) - parseInt(b));
+                console.log(`✅ Port cards created for: ${discoveredPorts.join(', ')}`);
+            }
+            
             // Track if this is a deep analysis (multi-pass) scan
             if (progressData.deep_analysis !== undefined) {
                 isDeepAnalysis = progressData.deep_analysis && progressData.use_ai;
@@ -672,6 +693,12 @@ function initializeMonitoring(scanId) {
                         discoveredPorts.push(port);
                         discoveredPorts.sort((a, b) => parseInt(a) - parseInt(b));
                         portAnalysis[port] = {found: 0, filtered: 0, final: 0, status: 'pending', cves: []};
+                    }
+                    
+                    // Update status from waiting to analyzing when CVE data arrives
+                    if (portAnalysis[port].status === 'waiting') {
+                        portAnalysis[port].status = 'analyzing';
+                        console.log(`🔄 Port ${port}: Status changed from waiting to analyzing`);
                     }
                     
                     const portCVEs = progressData.port_cves[port];

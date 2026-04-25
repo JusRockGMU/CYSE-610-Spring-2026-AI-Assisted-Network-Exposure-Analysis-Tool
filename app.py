@@ -7,6 +7,7 @@ import os
 import uuid
 import json
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 from werkzeug.utils import secure_filename
@@ -425,6 +426,23 @@ def upload():
         scan_progress[scan_id] = {'step': 'Error: No valid files', 'percent': 0}
         return jsonify({'error': 'No valid files uploaded'}), 400
     
+    # Extract all ports from Nmap files to pre-build port cards
+    all_ports = set()
+    for filename, file_path in file_paths:
+        try:
+            tree = ET.parse(file_path)
+            root = tree.getroot()
+            for host in root.findall('.//host'):
+                for port in host.findall('.//port'):
+                    port_id = port.get('portid')
+                    if port_id:
+                        all_ports.add(port_id)
+        except Exception as e:
+            print(f"⚠️  Could not extract ports from {filename}: {e}")
+    
+    discovered_ports = sorted(all_ports, key=int) if all_ports else []
+    print(f"📋 Pre-discovered {len(discovered_ports)} ports: {discovered_ports}")
+    
     # Update progress
     scan_progress[scan_id].update({
         'step': 'Starting analysis',
@@ -432,7 +450,8 @@ def upload():
         'status': 'Initializing',
         'current_file': 0,
         'total_files': len(file_paths),
-        'filenames': [filename for filename, _ in file_paths]
+        'filenames': [filename for filename, _ in file_paths],
+        'discovered_ports': discovered_ports  # Send all ports to frontend
     })
     
     # Start async processing

@@ -599,6 +599,11 @@ body {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.port-card.waiting {
+    border-left-color: #95a5a6;
+    background: #f8f9fa;
+}
+
 .port-card.analyzing {
     border-left-color: #3498db;
     background: #ebf5fb;
@@ -631,6 +636,11 @@ body {
 }
 
 .port-status-badge.pending {
+    background: #95a5a620;
+    color: #95a5a6;
+}
+
+.port-status-badge.waiting {
     background: #95a5a620;
     color: #95a5a6;
 }
