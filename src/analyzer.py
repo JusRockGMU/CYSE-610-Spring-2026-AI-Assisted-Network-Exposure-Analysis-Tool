@@ -162,7 +162,14 @@ class VulnerabilityAnalyzer:
             from .explainer import VulnerabilityExplainer
             explainer = VulnerabilityExplainer()
             
-            for vuln in host_analysis['vulnerabilities']:
+            total_vulns = len(host_analysis['vulnerabilities'])
+            for idx, vuln in enumerate(host_analysis['vulnerabilities']):
+                if progress_callback:
+                    progress_callback(
+                        f'Generating AI explanation for {vuln.get("cve_id", "vulnerability")} ({idx + 1}/{total_vulns})',
+                        85 + int((idx / total_vulns) * 10),
+                        'AI Explanation'
+                    )
                 try:
                     explanation = explainer.explain_vulnerability(vuln, host_analysis)
                     vuln['ai_explanation'] = explanation
