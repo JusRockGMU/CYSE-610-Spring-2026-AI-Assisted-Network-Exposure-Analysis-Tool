@@ -661,8 +661,20 @@ function initializeMonitoring(scanId) {
             progressFill.style.width = progressData.percent + '%';
             progressText.textContent = progressData.step;
             
-            // Update status badge
-            const status = progressData.status || 'Processing';
+            // Update status badge - override "Complete" if still in multi-pass analysis
+            let status = progressData.status || 'Processing';
+            
+            // Don't show "Complete" until truly done (not just after one port's passes)
+            if (status === 'Complete' && progressData.percent < 100) {
+                status = 'Processing';
+            }
+            
+            // If we're in multi-pass mode and see pass numbers, show that
+            const passMatch = progressData.step.match(/Pass (\d+)\/3/);
+            if (passMatch && isDeepAnalysis) {
+                status = `Pass ${passMatch[1]}/3`;
+            }
+            
             statusBadge.textContent = status;
             statusBadge.className = 'status-badge ' + status.toLowerCase().replace(/ /g, '-');
             
@@ -730,6 +742,9 @@ function initializeMonitoring(scanId) {
                                 cvePassCounts[port][cveId]++;
                                 console.log(`  ✓ ${cveId}: now at ${cvePassCounts[port][cveId]}/3 passes`);
                             });
+                            
+                            // Force UI update to show new pass counts
+                            lastPortDataHash = '';
                         } else {
                             console.log(`⏭️  Port ${port}: Skipping duplicate update for Pass ${currentPass}`);
                         }
@@ -961,7 +976,7 @@ function initializeMonitoring(scanId) {
                 });
                 
                 lastStep = progressData.step;
-                activityCount.textContent = activityHistory.length;
+                activityCount.textContent = `(${activityHistory.length})`;
                 updateActivityLog();
             }
             
