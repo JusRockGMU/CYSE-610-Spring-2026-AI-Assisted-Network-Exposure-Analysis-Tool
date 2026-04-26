@@ -175,7 +175,7 @@ function initializeMonitoring(scanId) {
                 html += `
                     <div class="pass-metric-item">
                         <div class="pass-metric-header">
-                            <span class="pass-badge">PASS ${idx + 1}</span>
+                            <span class="pass-badge">PASS ${metric.pass}</span>
                             <span class="pass-port">Port ${metric.port || 'Unknown'}</span>
                         </div>
                         <div class="pass-metric-details">
@@ -976,13 +976,15 @@ function initializeMonitoring(scanId) {
                     if (matchedStep === 'ai-filter' && progressData.step.includes('port')) {
                         const portMatch = progressData.step.match(/for port (\d+)/);
                         const cvesMatch = progressData.step.match(/(\d+) CVEs/);
+                        const passNumberMatch = progressData.step.match(/Pass (\d+)\/3/);
                         
                         if (portMatch) {
                             const port = portMatch[1];
-                            const passNumber = passMetrics.length + 1;
+                            // Extract actual pass number from step text (1-3 per port)
+                            const passNumber = passNumberMatch ? parseInt(passNumberMatch[1]) : 1;
                             
                             passMetrics.push({
-                                pass: passNumber,
+                                pass: passNumber,  // Now correctly 1-3 per port
                                 port: port,
                                 cves_found: cvesMatch ? parseInt(cvesMatch[1]) : 0,
                                 duration: progressData.elapsed_time.toFixed(1),
