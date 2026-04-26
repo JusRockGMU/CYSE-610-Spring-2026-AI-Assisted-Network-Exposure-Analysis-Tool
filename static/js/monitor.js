@@ -649,11 +649,10 @@ function initializeMonitoring(scanId) {
                 isDeepAnalysis = progressData.deep_analysis && progressData.use_ai;
             }
             
-            // Check if multi-pass is complete
-            // Complete when: status is Complete, OR we see "Pass 3/3", OR we see filtering/final steps after passes
-            if (progressData.status === 'Complete' || 
-                progressData.step.includes('Pass 3/3') ||
-                (isDeepAnalysis && (progressData.step.includes('filtering') || progressData.step.includes('AI Filtering')))) {
+            // Check if multi-pass is complete FOR THE ENTIRE SCAN (not just one port)
+            // Only set complete when the overall scan status is Complete
+            // Don't set complete just because ONE port finished Pass 3/3
+            if (progressData.status === 'Complete') {
                 isMultiPassComplete = true;
             }
             
