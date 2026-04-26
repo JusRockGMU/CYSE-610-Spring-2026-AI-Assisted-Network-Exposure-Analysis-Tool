@@ -839,17 +839,22 @@ function initializeMonitoring(scanId) {
                     saveState();
                 }
                 
-                // Only update status if it actually changed to prevent animation restarts
+                // Set status to analyzing during processing
+                // In multi-pass mode, check if we're still in Pass 1 or 2
+                const passMatch = progressData.step.match(/Pass (\d+)\/3/);
+                const currentPass = passMatch ? parseInt(passMatch[1]) : null;
+                
                 if (status === 'NVD Query' || progressData.step.includes('Querying NVD')) {
-                    if (portAnalysis[port].status !== 'analyzing' && portAnalysis[port].status !== 'complete') {
+                    // During Pass 1 or 2, always set to analyzing (even if briefly set to complete)
+                    if (!isDeepAnalysis || !currentPass || currentPass < 3) {
                         portAnalysis[port].status = 'analyzing';
                     }
                 } else if (status === 'AI Processing' || progressData.step.includes('enhancing')) {
-                    if (portAnalysis[port].status !== 'analyzing' && portAnalysis[port].status !== 'complete') {
+                    if (!isDeepAnalysis || !currentPass || currentPass < 3) {
                         portAnalysis[port].status = 'analyzing';
                     }
                 } else if (status === 'AI Filtering' || progressData.step.includes('filtering')) {
-                    if (portAnalysis[port].status !== 'analyzing' && portAnalysis[port].status !== 'complete') {
+                    if (!isDeepAnalysis || !currentPass || currentPass < 3) {
                         portAnalysis[port].status = 'analyzing';
                     }
                 }
