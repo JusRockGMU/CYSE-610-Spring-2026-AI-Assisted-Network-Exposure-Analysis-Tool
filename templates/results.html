@@ -60,28 +60,38 @@
                 <h4>Step-by-Step Breakdown</h4>
                 
                 {# Calculate cumulative time for positioning #}
-                {% set ns = namespace(cumulative_time=0, segments=[]) %}
+                {% set ns = namespace(cumulative_time=0, segments=[], total_min_width=0) %}
+                
+                {# First pass: calculate actual widths and track minimum widths needed #}
                 {% for step in data.timing.step_times %}
-                    {# Skip steps with very short duration (< 0.1s) to avoid invisible segments #}
-                    {% if step.duration >= 0.1 %}
-                        {% set start_time = ns.cumulative_time %}
-                        {% set end_time = ns.cumulative_time + step.duration %}
-                        {% set start_percent = (start_time / data.timing.total_time * 100)|round(2) %}
-                        {% set width_percent = (step.duration / data.timing.total_time * 100)|round(2) %}
-                        {# Ensure minimum width of 0.5% for visibility #}
-                        {% set width_percent = [width_percent, 0.5]|max %}
-                        {% set _ = ns.segments.append({
-                            'step': step.step,
-                            'status': step.status,
-                            'duration': step.duration,
-                            'start_percent': start_percent,
-                            'width_percent': width_percent,
-                            'start_time': start_time,
-                            'end_time': end_time
-                        }) %}
-                    {% endif %}
-                    {% set ns.cumulative_time = ns.cumulative_time + step.duration %}
+                    {% set start_time = ns.cumulative_time %}
+                    {% set end_time = ns.cumulative_time + step.duration %}
+                    {% set start_percent = (start_time / data.timing.total_time * 100)|round(2) %}
+                    {% set width_percent = (step.duration / data.timing.total_time * 100)|round(2) %}
+                    
+                    {# Set minimum width of 1% for visibility, even for 0-duration steps #}
+                    {% set display_width = [width_percent, 1.0]|max %}
+                    
+                    {% set _ = ns.segments.append({
+                        'step': step.step,
+                        'status': step.status,
+                        'duration': step.duration,
+                        'start_percent': start_percent,
+                        'width_percent': display_width,
+                        'start_time': start_time,
+                        'end_time': end_time
+                    }) %}
+                    {% set ns.cumulative_time = end_time %}
+                    {% set ns.total_min_width = ns.total_min_width + display_width %}
                 {% endfor %}
+                
+                {# Adjust widths if total exceeds 100% due to minimum widths #}
+                {% if ns.total_min_width > 100 %}
+                    {% set scale_factor = 100 / ns.total_min_width %}
+                    {% for segment in ns.segments %}
+                        {% set _ = segment.update({'width_percent': (segment.width_percent * scale_factor)|round(2)}) %}
+                    {% endfor %}
+                {% endif %}
                 
                 {# Timeline bar with colored segments #}
                 <div class="timeline-bar-container">
