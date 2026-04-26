@@ -93,13 +93,13 @@
                     {% endfor %}
                 {% endif %}
                 
-                {# Timeline bar with colored segments #}
+                {# Timeline bar with colored segments - use flexbox for seamless fill #}
                 <div class="timeline-bar-container">
                     <div class="timeline-bar">
                         {% for segment in ns.segments %}
                         {% set status_class = segment.status|lower|replace(' ', '-')|replace('/', '-') %}
                         <div class="timeline-segment timeline-segment-{{ status_class }}" 
-                             style="left: {{ segment.start_percent }}%; width: {{ segment.width_percent }}%"
+                             style="width: {{ segment.width_percent }}%"
                              title="{{ segment.step }} - {{ segment.status }} ({{ '%.2f'|format(segment.duration) }}s)"
                              data-step="{{ segment.step }}"
                              data-status="{{ segment.status }}">

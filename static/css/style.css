@@ -1323,22 +1323,22 @@ body {
     height: 40px;
     background: #f8f9fa;
     border-radius: 8px;
-    position: relative;
+    display: flex;
+    flex-direction: row;
     overflow: hidden;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Timeline segments with colors */
 .timeline-segment {
-    position: absolute;
     height: 100%;
-    top: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
     cursor: pointer;
     border-right: 1px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
 }
 
 .timeline-segment:hover {
