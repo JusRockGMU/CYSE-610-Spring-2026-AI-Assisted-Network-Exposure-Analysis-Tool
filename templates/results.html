@@ -110,18 +110,20 @@
                     </div>
                 </div>
                 
-                {# Legend showing step details #}
-                <div class="timeline-legend">
-                    {% for segment in ns.segments %}
-                    {% set status_class = segment.status|lower|replace(' ', '-')|replace('/', '-') %}
-                    <div class="legend-item">
-                        <div class="legend-color legend-color-{{ status_class }}"></div>
-                        <div class="legend-text">
-                            <strong>{{ segment.step }}</strong> ({{ segment.status }})
-                            <span class="legend-time">{{ '%.2f'|format(segment.duration) }}s</span>
+                {# Legend showing step details - scrollable #}
+                <div class="timeline-legend-container">
+                    <div class="timeline-legend">
+                        {% for segment in ns.segments %}
+                        {% set status_class = segment.status|lower|replace(' ', '-')|replace('/', '-') %}
+                        <div class="legend-item">
+                            <div class="legend-color legend-color-{{ status_class }}"></div>
+                            <div class="legend-text">
+                                <strong>{{ segment.step }}</strong> ({{ segment.status }})
+                                <span class="legend-time">{{ '%.2f'|format(segment.duration) }}s</span>
+                            </div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
             </div>
             {% endif %}
