@@ -805,12 +805,15 @@ function initializeMonitoring(scanId) {
                                 // Only mark as complete if:
                                 // - Single-pass mode, OR
                                 // - Multi-pass mode AND we've finished Pass 3 for THIS port
-                                // Don't mark complete just because we got final data - that happens after each pass
-                                // Only mark complete when we see Pass 3 data OR when we move to a different port
-                                const currentPass = portCVEs.pass || 1;
-                                const isPass3Complete = currentPass === 3;
+                                // Check BOTH portCVEs.pass AND step text to confirm Pass 3
+                                const cvePass = portCVEs.pass || 1;
+                                const stepPassMatch = progressData.step.match(/Pass (\d+)\/3/);
+                                const stepPass = stepPassMatch ? parseInt(stepPassMatch[1]) : null;
                                 
-                                if (!isDeepAnalysis || isPass3Complete) {
+                                // Only complete if BOTH indicators show Pass 3, or if no pass info (single-pass)
+                                const isPass3 = (cvePass === 3) || (stepPass === 3);
+                                
+                                if (!isDeepAnalysis || isPass3) {
                                     portAnalysis[port].status = 'complete';
                                 } else {
                                     // Keep status as 'analyzing' during Pass 1 and 2
@@ -892,13 +895,16 @@ function initializeMonitoring(scanId) {
                                 
                                 // Only mark complete if we're on Pass 3 or in single-pass mode
                                 const passMatch = progressData.step.match(/Pass (\d+)\/3/);
-                                const currentPass = passMatch ? parseInt(passMatch[1]) : 3; // Assume Pass 3 if no match
-                                const isPass3Complete = currentPass === 3;
+                                const currentPass = passMatch ? parseInt(passMatch[1]) : null;
                                 
-                                if (!isDeepAnalysis || isPass3Complete) {
+                                // In multi-pass, REQUIRE Pass 3 confirmation (don't assume)
+                                // Only mark complete if we explicitly see Pass 3
+                                const isPass3 = currentPass === 3;
+                                
+                                if (!isDeepAnalysis || isPass3) {
                                     portAnalysis[port].status = 'complete';
-                                } else {
-                                    // Keep as analyzing during Pass 1 and 2
+                                } else if (isDeepAnalysis) {
+                                    // In multi-pass mode, keep as analyzing if not Pass 3
                                     portAnalysis[port].status = 'analyzing';
                                 }
                                 
