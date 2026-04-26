@@ -782,9 +782,10 @@ function initializeMonitoring(scanId) {
                         }
                     }
                     if (portCVEs.final && portCVEs.final.length > 0) {
-                        // In multi-pass mode, only update final counts after all passes complete
-                        // In single-pass mode, update immediately
-                        const shouldUpdateFinal = !isDeepAnalysis || isMultiPassComplete;
+                        // In multi-pass mode, update final counts after THIS PORT finishes its passes
+                        // Check if this port is on Pass 3 (or single-pass mode)
+                        const currentPortPass = portCVEs.pass || 1;
+                        const shouldUpdateFinal = !isDeepAnalysis || currentPortPass === 3 || isMultiPassComplete;
                         
                         if (shouldUpdateFinal) {
                             // Only update if values actually changed
