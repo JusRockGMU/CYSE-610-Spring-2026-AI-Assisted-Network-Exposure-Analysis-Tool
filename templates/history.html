@@ -281,7 +281,7 @@ function renderScans(filter) {
                     <span class="scan-info-label">Duration</span>
                     <span class="scan-info-value">${scan.duration || 'In progress...'}</span>
                 </div>
-                ${scan.status === 'Complete' ? `
+                ${scan.status.toLowerCase() === 'complete' ? `
                 <div class="scan-info-item">
                     <span class="scan-info-label">Vulnerabilities</span>
                     <span class="scan-info-value">${scan.vuln_count || 0} found</span>
@@ -289,14 +289,14 @@ function renderScans(filter) {
                 ` : ''}
             </div>
             <div class="scan-actions">
-                ${scan.status === 'running' ? `
+                ${scan.status.toLowerCase() === 'running' ? `
                     <button class="btn btn-primary" onclick="reconnectToScan('${scan.scan_id}')">
-                        � Monitor
+                        📈 Monitor
                     </button>
                     <button class="btn btn-danger" onclick="cancelScan('${scan.scan_id}')">
                         ⏹ Stop
                     </button>
-                ` : scan.status === 'complete' ? `
+                ` : scan.status.toLowerCase() === 'complete' ? `
                     <button class="btn btn-primary" onclick="viewResults('${scan.scan_id}')">
                         📊 Summary
                     </button>
