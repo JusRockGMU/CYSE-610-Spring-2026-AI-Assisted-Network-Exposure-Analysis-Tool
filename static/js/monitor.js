@@ -797,7 +797,15 @@ function initializeMonitoring(scanId) {
                                     cve.filtered = !finalIds.has(cve.id);
                                 });
                                 
-                                portAnalysis[port].status = 'complete';
+                                // Only mark as complete if:
+                                // - Single-pass mode, OR
+                                // - Multi-pass mode AND all passes are done (Pass 3/3 complete)
+                                // Check if we're on Pass 3 by looking at the current pass number
+                                const currentPass = portCVEs.pass || 1;
+                                if (!isDeepAnalysis || currentPass >= 3) {
+                                    portAnalysis[port].status = 'complete';
+                                }
+                                
                                 totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
                             }
                         }
@@ -865,7 +873,14 @@ function initializeMonitoring(scanId) {
                             if (portAnalysis[port].final !== cveCount || portAnalysis[port].status !== 'complete') {
                                 portAnalysis[port].final = cveCount;
                                 portAnalysis[port].filtered = portAnalysis[port].found - cveCount;
-                                portAnalysis[port].status = 'complete';
+                                
+                                // Only mark complete if we're on Pass 3 or in single-pass mode
+                                const passMatch = progressData.step.match(/Pass (\d+)\/3/);
+                                const currentPass = passMatch ? parseInt(passMatch[1]) : 3; // Assume Pass 3 if no match
+                                if (!isDeepAnalysis || currentPass >= 3) {
+                                    portAnalysis[port].status = 'complete';
+                                }
+                                
                                 totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
                                 
                                 // Mark filtered CVEs IN PLACE
