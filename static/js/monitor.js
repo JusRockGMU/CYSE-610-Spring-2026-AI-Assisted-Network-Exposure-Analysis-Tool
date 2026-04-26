@@ -815,6 +815,17 @@ function initializeMonitoring(scanId) {
                                 
                                 if (!isDeepAnalysis || isPass3) {
                                     portAnalysis[port].status = 'complete';
+                                    
+                                    // When marking complete after Pass 3, ensure all validated CVEs show 3/3
+                                    if (isDeepAnalysis && isPass3 && portAnalysis[port].cves) {
+                                        portAnalysis[port].cves.forEach(cve => {
+                                            // If CVE is validated (not filtered), it passed all 3 passes
+                                            if (!cve.filtered && cve.passCount < 3) {
+                                                cve.passCount = 3;
+                                                console.log(`  ✓ Updated ${cve.id} to 3/3 passes (was ${cve.passCount})`);
+                                            }
+                                        });
+                                    }
                                 } else {
                                     // Keep status as 'analyzing' during Pass 1 and 2
                                     portAnalysis[port].status = 'analyzing';
@@ -903,6 +914,17 @@ function initializeMonitoring(scanId) {
                                 
                                 if (!isDeepAnalysis || isPass3) {
                                     portAnalysis[port].status = 'complete';
+                                    
+                                    // When marking complete after Pass 3, ensure all validated CVEs show 3/3
+                                    if (isDeepAnalysis && isPass3 && portAnalysis[port].cves) {
+                                        portAnalysis[port].cves.forEach(cve => {
+                                            // If CVE is validated (not filtered), it passed all 3 passes
+                                            if (!cve.filtered && cve.passCount < 3) {
+                                                cve.passCount = 3;
+                                                console.log(`  ✓ Updated ${cve.id} to 3/3 passes (was ${cve.passCount})`);
+                                            }
+                                        });
+                                    }
                                 } else if (isDeepAnalysis) {
                                     // In multi-pass mode, keep as analyzing if not Pass 3
                                     portAnalysis[port].status = 'analyzing';
