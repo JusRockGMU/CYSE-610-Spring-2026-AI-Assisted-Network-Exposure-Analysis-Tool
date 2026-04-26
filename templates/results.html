@@ -62,20 +62,25 @@
                 {# Calculate cumulative time for positioning #}
                 {% set ns = namespace(cumulative_time=0, segments=[]) %}
                 {% for step in data.timing.step_times %}
-                    {% set start_time = ns.cumulative_time %}
-                    {% set end_time = ns.cumulative_time + step.duration %}
-                    {% set start_percent = (start_time / data.timing.total_time * 100)|round(2) %}
-                    {% set width_percent = (step.duration / data.timing.total_time * 100)|round(2) %}
-                    {% set _ = ns.segments.append({
-                        'step': step.step,
-                        'status': step.status,
-                        'duration': step.duration,
-                        'start_percent': start_percent,
-                        'width_percent': width_percent,
-                        'start_time': start_time,
-                        'end_time': end_time
-                    }) %}
-                    {% set ns.cumulative_time = end_time %}
+                    {# Skip steps with very short duration (< 0.1s) to avoid invisible segments #}
+                    {% if step.duration >= 0.1 %}
+                        {% set start_time = ns.cumulative_time %}
+                        {% set end_time = ns.cumulative_time + step.duration %}
+                        {% set start_percent = (start_time / data.timing.total_time * 100)|round(2) %}
+                        {% set width_percent = (step.duration / data.timing.total_time * 100)|round(2) %}
+                        {# Ensure minimum width of 0.5% for visibility #}
+                        {% set width_percent = [width_percent, 0.5]|max %}
+                        {% set _ = ns.segments.append({
+                            'step': step.step,
+                            'status': step.status,
+                            'duration': step.duration,
+                            'start_percent': start_percent,
+                            'width_percent': width_percent,
+                            'start_time': start_time,
+                            'end_time': end_time
+                        }) %}
+                    {% endif %}
+                    {% set ns.cumulative_time = ns.cumulative_time + step.duration %}
                 {% endfor %}
                 
                 {# Timeline bar with colored segments #}
