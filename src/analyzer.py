@@ -518,7 +518,7 @@ class VulnerabilityAnalyzer:
             # STAGE 4: AI-Enhanced False Positive Filtering (only in deep analysis mode)
             if self.deep_analysis and self.ai_validator and unique_cves:
                 if progress_callback:
-                    progress_callback(f'AI filtering {len(unique_cves)} CVEs for port {port}', 70, 'AI Filtering')
+                    progress_callback(f'Pass {pass_num}/3: AI filtering {len(unique_cves)} CVEs for port {port}', 70, 'AI Filtering')
                 print(f"\n🤖 PORT {port} - AI FILTERING:")
                 print(f"  Input: {len(unique_cves)} CVEs")
                 ai_filtered_cves = self.ai_validator.filter_and_rank_cves(unique_cves, service_data or {}, os_context)
