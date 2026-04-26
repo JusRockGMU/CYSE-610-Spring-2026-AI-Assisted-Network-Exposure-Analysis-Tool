@@ -58,28 +58,70 @@
             {% if data.timing.step_times and data.timing.step_times|length > 0 %}
             <div class="step-breakdown">
                 <h4>Step-by-Step Breakdown</h4>
-                <div class="step-timeline">
-                    {% for step in data.timing.step_times %}
-                    <div class="timeline-step">
-                        <div class="timeline-marker" style="left: {{ step.percent }}%" 
-                             title="{{ step.step }} ({{ step.status }})" 
-                             data-step="{{ step.step }}" 
-                             data-status="{{ step.status }}">
-                            <div class="marker-dot"></div>
-                            <div class="marker-label">{{ step.percent }}%</div>
-                            <div class="marker-tooltip">
-                                <div class="tooltip-step">{{ step.step }}</div>
-                                <div class="tooltip-status">{{ step.status }}</div>
+                
+                {# Calculate cumulative time for positioning #}
+                {% set ns = namespace(cumulative_time=0, segments=[]) %}
+                {% for step in data.timing.step_times %}
+                    {% set start_time = ns.cumulative_time %}
+                    {% set end_time = ns.cumulative_time + step.duration %}
+                    {% set start_percent = (start_time / data.timing.total_time * 100)|round(2) %}
+                    {% set width_percent = (step.duration / data.timing.total_time * 100)|round(2) %}
+                    {% set _ = ns.segments.append({
+                        'step': step.step,
+                        'status': step.status,
+                        'duration': step.duration,
+                        'start_percent': start_percent,
+                        'width_percent': width_percent,
+                        'start_time': start_time,
+                        'end_time': end_time
+                    }) %}
+                    {% set ns.cumulative_time = end_time %}
+                {% endfor %}
+                
+                {# Timeline bar with colored segments #}
+                <div class="timeline-bar-container">
+                    <div class="timeline-bar">
+                        {% for segment in ns.segments %}
+                        {% set status_class = segment.status|lower|replace(' ', '-')|replace('/', '-') %}
+                        <div class="timeline-segment timeline-segment-{{ status_class }}" 
+                             style="left: {{ segment.start_percent }}%; width: {{ segment.width_percent }}%"
+                             title="{{ segment.step }} - {{ segment.status }} ({{ '%.2f'|format(segment.duration) }}s)"
+                             data-step="{{ segment.step }}"
+                             data-status="{{ segment.status }}">
+                            <div class="segment-label">
+                                {% if segment.width_percent > 5 %}
+                                    {{ '%.1f'|format(segment.duration) }}s
+                                {% endif %}
                             </div>
                         </div>
-                        <div class="timeline-info">
-                            <span class="timeline-duration">{{ "%.2f"|format(step.duration) }}s</span>
+                        {% endfor %}
+                    </div>
+                    
+                    {# Time markers below the bar #}
+                    <div class="timeline-markers">
+                        <span class="time-marker" style="left: 0%">0.00s</span>
+                        {% for segment in ns.segments %}
+                        {% if segment.width_percent > 8 %}
+                        <span class="time-marker" style="left: {{ segment.start_percent + segment.width_percent }}%">
+                            {{ '%.2f'|format(segment.end_time) }}s
+                        </span>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                {# Legend showing step details #}
+                <div class="timeline-legend">
+                    {% for segment in ns.segments %}
+                    {% set status_class = segment.status|lower|replace(' ', '-')|replace('/', '-') %}
+                    <div class="legend-item">
+                        <div class="legend-color legend-color-{{ status_class }}"></div>
+                        <div class="legend-text">
+                            <strong>{{ segment.step }}</strong> ({{ segment.status }})
+                            <span class="legend-time">{{ '%.2f'|format(segment.duration) }}s</span>
                         </div>
                     </div>
                     {% endfor %}
-                </div>
-                <div class="timeline-bar">
-                    <div class="timeline-fill" style="width: 100%"></div>
                 </div>
             </div>
             {% endif %}
