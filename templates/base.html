@@ -34,7 +34,7 @@
     </footer>
     
     <script>
-        // Check if Monitor and Summary links should be disabled (global function)
+        // Update navigation links to point to most recent scans
         window.checkNavAvailability = async function() {
             const monitorLink = document.getElementById('monitorNavLink');
             const summaryLink = document.getElementById('summaryNavLink');
@@ -44,38 +44,48 @@
                 const data = await response.json();
                 const scans = data.scans || [];
                 
-                console.log('📊 Navigation check - scans:', scans.map(s => ({id: s.id, status: s.status})));
+                console.log('📊 Navigation check - scans:', scans.map(s => ({id: s.scan_id, status: s.status})));
                 
-                // Check if there are any running scans (exclude cancelled)
-                const hasActiveScans = scans.some(scan => 
-                    (scan.status === 'running' || scan.status === 'processing') && 
-                    scan.status !== 'cancelled'
+                // Find most recent active scan (running or processing)
+                const activeScan = scans.find(scan => 
+                    scan.status.toLowerCase() === 'running' || 
+                    scan.status.toLowerCase() === 'processing'
                 );
                 
-                // Check if there are any completed scans
-                const hasCompletedScans = scans.some(scan => scan.status === 'complete');
+                // Find most recent completed scan
+                const completedScan = scans.find(scan => 
+                    scan.status.toLowerCase() === 'complete'
+                );
                 
-                console.log('📊 hasActiveScans:', hasActiveScans, 'hasCompletedScans:', hasCompletedScans);
+                // Find most recent scan overall (for monitor fallback)
+                const mostRecentScan = scans[0];
                 
-                // Update Monitor link
+                console.log('📊 activeScan:', activeScan?.scan_id, 'completedScan:', completedScan?.scan_id, 'mostRecent:', mostRecentScan?.scan_id);
+                
+                // Update Monitor link - prefer active scan, fallback to most recent
                 if (monitorLink) {
-                    if (!hasActiveScans) {
-                        monitorLink.classList.add('disabled');
-                        monitorLink.title = 'No active scans';
-                    } else {
+                    const scanForMonitor = activeScan || mostRecentScan;
+                    if (scanForMonitor) {
+                        monitorLink.href = `/monitor?scan_id=${scanForMonitor.scan_id}`;
                         monitorLink.classList.remove('disabled');
-                        monitorLink.title = 'View active scan';
+                        monitorLink.title = activeScan ? 'View active scan' : 'View most recent scan';
+                    } else {
+                        monitorLink.href = '/monitor';
+                        monitorLink.classList.add('disabled');
+                        monitorLink.title = 'No scans available';
                     }
                 }
                 
-                // Update Summary link
+                // Update Summary link - use most recent completed scan
                 if (summaryLink) {
-                    if (!hasCompletedScans) {
+                    if (completedScan) {
+                        summaryLink.href = `/results/${completedScan.scan_id}`;
+                        summaryLink.classList.remove('disabled');
+                        summaryLink.title = 'View latest results';
+                    } else {
+                        summaryLink.href = '/summary';
                         summaryLink.classList.add('disabled');
                         summaryLink.title = 'No completed scans';
-                    } else {
-                        summaryLink.classList.remove('disabled');
-                        summaryLink.title = 'View latest summary';
                     }
                 }
             } catch (error) {
