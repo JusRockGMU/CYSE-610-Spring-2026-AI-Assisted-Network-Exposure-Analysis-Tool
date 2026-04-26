@@ -726,6 +726,11 @@ function initializeMonitoring(scanId) {
                             lastProcessedPass[port] = 0;
                         }
                         
+                        // During Pass 1 or 2, keep status as analyzing (don't let it become complete)
+                        if (isDeepAnalysis && currentPass < 3) {
+                            portAnalysis[port].status = 'analyzing';
+                        }
+                        
                         console.log(`🔍 Port ${port}: currentPass=${currentPass}, lastProcessedPass=${lastProcessedPass[port]}, CVEs=${portCVEs.found.length}`);
                         
                         // Only update pass counts if this is a new pass (not a duplicate update)
