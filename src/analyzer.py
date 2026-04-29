@@ -16,17 +16,19 @@ class VulnerabilityAnalyzer:
     # No hardcoded rules - rely on AI-enhanced CPE matching and NVD queries
     VULNERABILITY_DATABASE = {}
     
-    def __init__(self, use_ai: bool = False, use_nvd: bool = True, deep_analysis: bool = True):
+    def __init__(self, use_ai: bool = False, use_nvd: bool = True, deep_analysis: bool = True, ai_explanations: bool = True):
         """Initialize the analyzer with optional AI and NVD support.
         
         Args:
             use_ai: Enable AI-enhanced analysis
             use_nvd: Enable NVD API integration
             deep_analysis: Enable iterative refinement (slower but more accurate)
+            ai_explanations: Enable AI-generated explanations for vulnerabilities
         """
         self.use_ai = use_ai
         self.use_nvd = use_nvd
         self.deep_analysis = deep_analysis
+        self.ai_explanations = ai_explanations
         self.anthropic_client = None
         self.nvd_client = None
         self.ai_validator = None
@@ -46,9 +48,14 @@ class VulnerabilityAnalyzer:
             self.nvd_client = NVDClient(api_key=nvd_api_key)
             print("NVD API integration enabled for real-time CVE lookups")
     
-    def analyze(self, processed_data: Dict, progress_callback=None) -> Dict:
+    def analyze(self, processed_data: Dict, progress_callback=None, selected_ports=None) -> Dict:
         """
         Analyze processed data for vulnerabilities.
+        
+        Args:
+            processed_data: Processed scan data
+            progress_callback: Optional callback for progress updates
+            selected_ports: Optional list of port numbers to analyze (filters others out)
         
         Args:
             processed_data: Processed scan data
@@ -78,7 +85,7 @@ class VulnerabilityAnalyzer:
                     50 + int((host_idx / total_hosts) * 30),
                     'Analyzing'
                 )
-            host_analysis = self._analyze_host(host, progress_callback)
+            host_analysis = self._analyze_host(host, progress_callback, selected_ports)
             analysis['hosts'].append(host_analysis)
             
             analysis['summary']['total_hosts'] += 1
@@ -103,7 +110,7 @@ class VulnerabilityAnalyzer:
         
         return analysis
     
-    def _analyze_host(self, host: Dict, progress_callback=None) -> Dict:
+    def _analyze_host(self, host: Dict, progress_callback=None, selected_ports=None) -> Dict:
         """Analyze individual host for vulnerabilities."""
         host_analysis = {
             'ip': host.get('ip', 'unknown'),
@@ -114,10 +121,15 @@ class VulnerabilityAnalyzer:
             'risk_score': 0
         }
         
+        # Filter services by selected ports if specified
+        services = host.get('services', [])
+        if selected_ports:
+            services = [s for s in services if str(s.get('port')) in selected_ports]
+            if services:
+                print(f"🔍 Filtering to {len(services)} selected port(s): {[s.get('port') for s in services]}")
+        
         # Extract OS context for better vulnerability detection
         os_context = self._extract_os_context(host.get('os', {}))
-        
-        services = host.get('services', [])
         print(f"\n{'='*80}")
         print(f"DEBUG: Analyzer received {len(services)} services for host {host.get('ip', 'unknown')}")
         print(f"{'='*80}")
@@ -157,8 +169,8 @@ class VulnerabilityAnalyzer:
         host_analysis['vulnerabilities'] = self._consolidate_vulnerabilities(host_analysis['vulnerabilities'])
         host_analysis['filtered_vulnerabilities'] = self._consolidate_vulnerabilities(host_analysis['filtered_vulnerabilities'])
         
-        # Generate AI explanations for each vulnerability if AI is enabled
-        if self.use_ai and self.anthropic_client:
+        # Generate AI explanations for each vulnerability if AI explanations are enabled
+        if self.use_ai and self.ai_explanations and self.anthropic_client:
             from .explainer import VulnerabilityExplainer
             explainer = VulnerabilityExplainer()
             
@@ -293,9 +305,7 @@ class VulnerabilityAnalyzer:
         else:
             print(f"DEBUG: No vulnerability found for port {port}, service {service_name}")
         
-        config_vuln = self._check_misconfigurations(service, port)
-        if config_vuln:
-            vulnerabilities.append(config_vuln)
+        # Misconfiguration checks removed per user request (INFO-001, CONFIG-001)
         
         return vulnerabilities, filtered_vulnerabilities
     
@@ -340,14 +350,43 @@ class VulnerabilityAnalyzer:
                     filtered_cve_appearances[cve_id]['count'] += 1
                     filtered_cve_appearances[cve_id]['passes'].append(pass_num)
             
-            # Send cumulative CVE list to frontend after each pass
-            if progress_callback and final_cve_appearances:
-                cumulative_cve_ids = list(final_cve_appearances.keys())
+            # Build cumulative state for frontend after each pass
+            all_cve_ids = list(set(final_cve_appearances.keys()) | set(filtered_cve_appearances.keys()))
+            cumulative_pass_data = {}
+            
+            for cve_id in all_cve_ids:
+                pass_count = final_cve_appearances.get(cve_id, {}).get('count', 0)
+                
+                # Determine status based on pass count
+                if pass_count >= 2:
+                    status = 'validated'  # Appeared in 2+ passes = validated
+                elif pass_num == 2 and pass_count == 0:
+                    status = 'filtered'  # Can't reach 2/3 after pass 2 with 0 appearances
+                elif pass_num == 3 and pass_count < 2:
+                    status = 'filtered'  # Final pass, didn't reach 2/3
+                else:
+                    status = 'validating'  # Still in progress
+                
+                cumulative_pass_data[cve_id] = {
+                    'pass_count': pass_count,
+                    'total_passes': pass_num,
+                    'status': status
+                }
+            
+            # Send cumulative update after each pass
+            if progress_callback and all_cve_ids:
                 progress_callback(
-                    f'Pass {pass_num}/{num_passes}: Found {len(cumulative_cve_ids)} unique CVEs so far',
-                    60 + (pass_num * 5),
-                    f'Multi-Pass Analysis',
-                    {'port': port, 'cves': cumulative_cve_ids, 'stage': 'found', 'pass': pass_num}
+                    f'Pass {pass_num}/{num_passes} complete: {len(all_cve_ids)} total CVEs for port {port}',
+                    60 + (pass_num * 5) + 1,
+                    f'Pass {pass_num}/3 Complete',
+                    {
+                        'port': port, 
+                        'all_cves': all_cve_ids, 
+                        'pass_data': cumulative_pass_data,
+                        'stage': 'pass_cumulative',
+                        'pass': pass_num,
+                        'status': 'analyzing'
+                    }
                 )
         
         # Calculate consensus-based confidence
@@ -435,6 +474,36 @@ class VulnerabilityAnalyzer:
         print(f"\n  ✅ Final: {len(final_vulns)} high/medium confidence CVEs")
         print(f"  🚫 Filtered: {len(filtered_vulns)} CVEs (low consensus + consistently filtered)")
         
+        # Send final consensus data to frontend
+        if progress_callback:
+            all_cve_ids = [cve.get('cve_id') for cve in consensus_cves + all_filtered_cves if cve.get('cve_id')]
+            final_cve_ids = [cve.get('cve_id') for cve in consensus_cves if cve.get('cve_id')]
+            
+            # Build consensus data with scores and confidence
+            consensus_data = {}
+            for cve in consensus_cves + all_filtered_cves:
+                cve_id = cve.get('cve_id')
+                if cve_id:
+                    consensus_data[cve_id] = {
+                        'consensus_score': cve.get('consensus_score', 0),
+                        'ai_confidence': cve.get('ai_confidence', 'unknown')
+                    }
+            
+            progress_callback(
+                f'Consensus complete: {len(final_vulns)} validated, {len(filtered_vulns)} filtered for port {port}',
+                85,
+                'Consensus Complete',
+                {
+                    'port': port,
+                    'found': all_cve_ids,
+                    'final': final_cve_ids,
+                    'filtered_count': len(filtered_vulns),
+                    'consensus_data': consensus_data,
+                    'stage': 'consensus',
+                    'status': 'complete'
+                }
+            )
+        
         return (final_vulns, filtered_vulns)
     
     def _single_pass_vulnerability_check(self, service: str, product: str, version: str, port: int, service_data: Dict = None, os_context: Dict = None, progress_callback=None, pass_num: int = 1) -> List[Dict]:
@@ -509,15 +578,24 @@ class VulnerabilityAnalyzer:
             for cve in unique_cves:
                 print(f"    - {cve.get('cve_id')} (CVSS: {cve.get('cvss_score', 'N/A')})")
             
-            # Send found CVEs to frontend
+            # Send found CVEs to frontend immediately (before AI filtering)
             if progress_callback:
                 cve_ids = [cve.get('cve_id') for cve in unique_cves if cve.get('cve_id')]
                 progress_callback(
-                    f'Found {len(unique_cves)} CVEs for port {port}', 
-                    65, 
+                    f'Pass {pass_num}/3: NVD returned {len(unique_cves)} CVEs for port {port}', 
+                    60 + (pass_num * 5) - 2, 
                     'NVD Query',
-                    {'port': port, 'cves': cve_ids, 'stage': 'found'}
+                    {
+                        'port': port, 
+                        'cves': cve_ids, 
+                        'stage': 'nvd_returned',
+                        'pass': pass_num,
+                        'status': 'nvd_complete'
+                    }
                 )
+                # Small delay to ensure frontend captures this update before AI filtering starts
+                import time
+                time.sleep(0.2)  # 200ms delay
             
             # Track which CVEs will be filtered out
             removed_cves = []
@@ -559,14 +637,23 @@ class VulnerabilityAnalyzer:
                             cve['filtered_by'] = 'Prioritization'
                         removed_cves.append(cve)
             
-            # Send final CVEs to frontend
-            if progress_callback and filtered_cves:
-                cve_ids = [cve.get('cve_id') for cve in filtered_cves if cve.get('cve_id')]
+            # Send AI filtering results to frontend
+            if progress_callback:
+                passed_ids = [cve.get('cve_id') for cve in filtered_cves if cve.get('cve_id')]
+                failed_ids = [cve.get('cve_id') for cve in removed_cves if cve.get('cve_id')]
+                all_ids = passed_ids + failed_ids
                 progress_callback(
-                    f'Final: {len(filtered_cves)} CVEs for port {port}', 
-                    75, 
+                    f'Pass {pass_num}/3: AI filtered to {len(passed_ids)}/{len(all_ids)} CVEs for port {port}', 
+                    60 + (pass_num * 5), 
                     'AI Filtering',
-                    {'port': port, 'cves': cve_ids, 'stage': 'final'}
+                    {
+                        'port': port, 
+                        'passed': passed_ids,
+                        'failed': failed_ids,
+                        'stage': 'ai_filtered',
+                        'pass': pass_num,
+                        'status': 'pass_complete'
+                    }
                 )
             
             if filtered_cves or removed_cves:

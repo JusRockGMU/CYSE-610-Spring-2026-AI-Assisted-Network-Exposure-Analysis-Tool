@@ -190,7 +190,13 @@ function initializeMonitoring(scanId) {
         
         // Add activity history
         html += activityHistory.map((activity) => {
-            const statusClass = activity.status.toLowerCase().replace(/ /g, '-');
+            let statusClass = activity.status.toLowerCase().replace(/ /g, '-');
+            
+            // Special handling: if step mentions "NVD returned", treat as NVD query
+            if (activity.step.includes('NVD returned') || activity.step.includes('Querying NVD')) {
+                statusClass = 'nvd-query';
+            }
+            
             const statusColors = {
                 'ai-processing': '#3498db',
                 'nvd-query': '#f39c12',
@@ -236,9 +242,6 @@ function initializeMonitoring(scanId) {
     let lastPortDataHash = ''; // Track if port data actually changed
     let updateTimeout = null; // Debounce timer for updates
     let isDeepAnalysis = false; // Track if multi-pass analysis is enabled
-    let isMultiPassComplete = false; // Track if all passes are done
-    let cvePassCounts = {}; // Track how many passes each CVE appeared in: {port: {cve_id: count}}
-    let lastProcessedPass = {}; // Track last pass processed per port to avoid double-counting
     
     // Try to restore state from sessionStorage
     const stateKey = `monitor_state_${scanId}`;
@@ -406,6 +409,21 @@ function initializeMonitoring(scanId) {
         }
     }
     
+    function sortCVEs(cves) {
+        return cves.sort((a, b) => {
+            // Primary sort: validated (2+) before filtered (0-1)
+            const aValidated = a.passCount >= 2 ? 1 : 0;
+            const bValidated = b.passCount >= 2 ? 1 : 0;
+            
+            if (aValidated !== bValidated) {
+                return bValidated - aValidated;  // Validated first
+            }
+            
+            // Secondary sort: by CVE ID (alphabetical)
+            return a.id.localeCompare(b.id);
+        });
+    }
+    
     function updateLivePortAnalysis() {
         // console.log('📞 updateLivePortAnalysis called');
         // Debounce updates to prevent rapid refreshing
@@ -513,30 +531,41 @@ function initializeMonitoring(scanId) {
                         <div class="cve-list">
                             <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #7f8c8d;">CVE Details:</h4>
                             ${sortCVEs(analysis.cves).map(cve => {
-                                // Determine status: filtered, validated (consensus reached), or pending
                                 let statusClass, statusText;
-                                if (cve.filtered) {
-                                    statusClass = 'filtered-cve';
-                                    statusText = '🚫 Filtered';
-                                } else if (isDeepAnalysis) {
-                                    // Multi-pass mode: validate when CVE appears in 2+ passes
-                                    if (cve.passCount >= 2) {
+                                
+                                if (isDeepAnalysis) {
+                                    // Multi-pass mode - use status from backend
+                                    if (cve.status === 'pending_ai') {
+                                        statusClass = 'pending-cve';
+                                        statusText = `⏳ Waiting for AI (${cve.passCount}/${cve.totalPasses})`;
+                                    } else if (cve.status === 'passed_ai') {
+                                        statusClass = 'pending-cve';
+                                        statusText = `✓ Passed AI (${cve.passCount}/${cve.totalPasses})`;
+                                    } else if (cve.status === 'failed_ai') {
+                                        statusClass = 'pending-cve';
+                                        statusText = `✗ Failed AI (${cve.passCount}/${cve.totalPasses})`;
+                                    } else if (cve.status === 'validated') {
                                         statusClass = 'validated-cve';
                                         statusText = `✓ Validated (${cve.passCount}/3)`;
+                                    } else if (cve.status === 'filtered') {
+                                        statusClass = 'filtered-cve';
+                                        statusText = `🚫 Filtered (${cve.passCount}/3)`;
                                     } else {
+                                        // Validating
                                         statusClass = 'pending-cve';
-                                        statusText = `⏳ Pending (${cve.passCount}/3)`;
+                                        statusText = `⏳ Validating (${cve.passCount}/${cve.totalPasses})`;
                                     }
                                 } else {
-                                    // Single-pass mode: validate when analysis complete
-                                    if (analysis.status === 'complete') {
+                                    // Single-pass mode (existing logic)
+                                    if (cve.filtered) {
+                                        statusClass = 'filtered-cve';
+                                        statusText = '🚫 Filtered';
+                                    } else {
                                         statusClass = 'validated-cve';
                                         statusText = '✓ Validated';
-                                    } else {
-                                        statusClass = 'pending-cve';
-                                        statusText = '⏳ Pending';
                                     }
                                 }
+                                
                                 return `
                                 <div class="cve-item ${statusClass}">
                                     <span class="cve-id">${cve.id}</span>
@@ -628,6 +657,7 @@ function initializeMonitoring(scanId) {
             // Pre-build all port cards when we receive discovered_ports
             if (progressData.discovered_ports && progressData.discovered_ports.length > 0) {
                 console.log(`📋 Pre-building ${progressData.discovered_ports.length} port cards:`, progressData.discovered_ports);
+                let portsAdded = false;
                 progressData.discovered_ports.forEach(port => {
                     if (!discoveredPorts.includes(port)) {
                         discoveredPorts.push(port);
@@ -638,10 +668,16 @@ function initializeMonitoring(scanId) {
                             status: 'waiting',  // New status: waiting for analysis
                             cves: []
                         };
+                        portsAdded = true;
                     }
                 });
                 discoveredPorts.sort((a, b) => parseInt(a) - parseInt(b));
                 console.log(`✅ Port cards created for: ${discoveredPorts.join(', ')}`);
+                
+                // Update display to show the port cards
+                if (portsAdded) {
+                    updateLivePortAnalysis();
+                }
             }
             
             // Track if this is a deep analysis (multi-pass) scan
@@ -697,148 +733,140 @@ function initializeMonitoring(scanId) {
                 updateLivePortAnalysis();
             }
             
-            // Check for CVE data in progress
+            // Check for CVE data in progress - NEW STAGE-BASED HANDLING
             if (progressData.port_cves) {
+                let newPortsAdded = false;
                 for (const port in progressData.port_cves) {
                     if (!discoveredPorts.includes(port)) {
                         discoveredPorts.push(port);
                         discoveredPorts.sort((a, b) => parseInt(a) - parseInt(b));
-                        portAnalysis[port] = {found: 0, filtered: 0, final: 0, status: 'pending', cves: []};
-                    }
-                    
-                    // Update status from waiting to analyzing when CVE data arrives
-                    if (portAnalysis[port].status === 'waiting') {
-                        portAnalysis[port].status = 'analyzing';
-                        console.log(`🔄 Port ${port}: Status changed from waiting to analyzing`);
+                        portAnalysis[port] = {found: 0, filtered: 0, final: 0, status: 'pending', cves: [], pass: 0};
+                        newPortsAdded = true;
+                        console.log(`📋 Port ${port} discovered via CVE data`);
                     }
                     
                     const portCVEs = progressData.port_cves[port];
-                    const currentPass = portCVEs.pass || 1; // Get current pass number (should be 1-3 per port)
                     
-                    if (portCVEs.found && portCVEs.found.length > 0) {
-                        // Initialize trackers for this port
-                        if (!cvePassCounts[port]) {
-                            cvePassCounts[port] = {};
-                            console.log(`🆕 Initialized tracking for Port ${port}`);
-                        }
-                        if (!lastProcessedPass[port]) {
-                            lastProcessedPass[port] = 0;
-                        }
+                    console.log(`🔍 Port ${port} update - status: ${portCVEs.status}, has consensus_data: ${!!portCVEs.consensus_data}, has pass_data: ${!!portCVEs.pass_data}, has nvd_cves: ${!!portCVEs.nvd_cves}`);
+                    
+                    // Initialize working data if needed
+                    if (!portAnalysis[port].workingData) {
+                        portAnalysis[port].workingData = {
+                            nvd_cves: [],
+                            ai_passed: [],
+                            ai_failed: []
+                        };
+                    }
+                    
+                    // Process all stages, but only update DISPLAY array when stage completes
+                    // Use else-if to ensure only ONE stage processes per update
+                    
+                    // Stage 4: Final consensus (after all 3 passes) - HIGHEST PRIORITY
+                    // This stage contains CUMULATIVE data from all 3 passes
+                    // consensus_score = how many passes the CVE appeared in (0-3)
+                    if ((portCVEs.status === 'consensus' || portCVEs.status === 'complete') && 
+                        portCVEs.consensus_data && portCVEs.found) {
+                        console.log(`✅ CONSENSUS STAGE - Port ${port}:`);
+                        console.log(`   Found CVEs: ${portCVEs.found.length}`, portCVEs.found);
+                        console.log(`   Final CVEs: ${portCVEs.final?.length}`, portCVEs.final);
+                        console.log(`   Consensus data:`, portCVEs.consensus_data);
                         
-                        // During Pass 1 or 2, keep status as analyzing (don't let it become complete)
-                        if (isDeepAnalysis && currentPass < 3) {
-                            portAnalysis[port].status = 'analyzing';
-                        }
+                        const finalSet = new Set(portCVEs.final || []);
                         
-                        console.log(`🔍 Port ${port}: currentPass=${currentPass}, lastProcessedPass=${lastProcessedPass[port]}, CVEs=${portCVEs.found.length}`);
-                        
-                        // Only update pass counts if this is a new pass (not a duplicate update)
-                        if (currentPass > lastProcessedPass[port]) {
-                            console.log(`✅ Port ${port}: NEW Pass ${currentPass} detected (previous was ${lastProcessedPass[port]})`);
-                            lastProcessedPass[port] = currentPass;
+                        // Build display array with cumulative pass counts from all 3 passes
+                        portAnalysis[port].cves = portCVEs.found.map(cveId => {
+                            const consensus = portCVEs.consensus_data[cveId];
+                            const passCount = consensus?.consensus_score || 0;  // Cumulative count from all passes
+                            const isValidated = finalSet.has(cveId);
                             
-                            // Increment pass count for CVEs in this NEW pass
-                            portCVEs.found.forEach(cveId => {
-                                // Initialize to 0 if not seen before, then increment
-                                if (!cvePassCounts[port][cveId]) {
-                                    cvePassCounts[port][cveId] = 0;
-                                }
-                                cvePassCounts[port][cveId]++;
-                                console.log(`  ✓ ${cveId}: now at ${cvePassCounts[port][cveId]}/3 passes`);
-                            });
+                            const cveObj = {
+                                id: cveId,
+                                passCount: passCount,
+                                totalPasses: 3,
+                                status: isValidated ? 'validated' : 'filtered',
+                                filtered: !isValidated
+                            };
                             
-                            // Force UI update to show new pass counts
-                            lastPortDataHash = '';
-                        } else {
-                            console.log(`⏭️  Port ${port}: Skipping duplicate update for Pass ${currentPass}`);
-                        }
-                        
-                        // Merge new CVEs with existing ones (accumulate across passes)
-                        const existingIds = new Set(portAnalysis[port].cves.map(c => c.id));
-                        const newCVEs = portCVEs.found
-                            .filter(id => !existingIds.has(id))
-                            .map(id => ({
-                                id, 
-                                filtered: false,
-                                passCount: cvePassCounts[port][id] || 1
-                            }));
-                        
-                        // Update pass counts for existing CVEs
-                        portAnalysis[port].cves.forEach(cve => {
-                            if (cvePassCounts[port][cve.id]) {
-                                cve.passCount = cvePassCounts[port][cve.id];
-                            }
+                            console.log(`   ${cveId}: passCount=${passCount}, isValidated=${isValidated}, status=${cveObj.status}`);
+                            return cveObj;
                         });
                         
-                        portAnalysis[port].cves = [...portAnalysis[port].cves, ...newCVEs];
-                        portAnalysis[port].found = portAnalysis[port].cves.length;
-                        totalFound = Object.values(portAnalysis).reduce((sum, p) => sum + p.found, 0);
+                        portAnalysis[port].found = portCVEs.found.length;
+                        portAnalysis[port].final = portCVEs.final?.length || 0;
+                        portAnalysis[port].filtered = portCVEs.filtered_count || 0;
+                        portAnalysis[port].status = 'complete';
                         
-                        // In multi-pass mode, count CVEs with 2+ passes as final
-                        if (isDeepAnalysis) {
-                            const validatedCount = portAnalysis[port].cves.filter(c => !c.filtered && c.passCount >= 2).length;
-                            portAnalysis[port].final = validatedCount;
-                            totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
-                        }
+                        console.log(`✅ Analysis complete: ${portAnalysis[port].final} validated, ${portAnalysis[port].filtered} filtered`);
+                        console.log(`   CVEs: ${portAnalysis[port].cves.map(c => `${c.id}(${c.status})`).join(', ')}`);
+                        
+                        // UPDATE DISPLAY ARRAY - this is what the user sees
+                        updateLivePortAnalysis();
                     }
-                    if (portCVEs.final && portCVEs.final.length > 0) {
-                        // In multi-pass mode, update final counts after THIS PORT finishes its passes
-                        // Check if this port is on Pass 3 (or single-pass mode)
-                        const currentPortPass = portCVEs.pass || 1;
-                        const shouldUpdateFinal = !isDeepAnalysis || currentPortPass === 3 || isMultiPassComplete;
+                    // Stage 3: Cumulative update after pass completes
+                    // Shows progressive pass counts: after Pass 1 (X/1), Pass 2 (X/2), Pass 3 (X/3)
+                    // pass_count = how many times CVE has appeared SO FAR (0 to current pass number)
+                    else if (portCVEs.status === 'analyzing' && portCVEs.pass_data && portCVEs.all_cves) {
+                        console.log(`📊 CUMULATIVE STAGE - Port ${port} Pass ${portCVEs.pass}: ${portCVEs.all_cves.length} CVEs`);
+                        portAnalysis[port].status = 'analyzing';
+                        portAnalysis[port].pass = portCVEs.pass || 1;
                         
-                        if (shouldUpdateFinal) {
-                            // Only update if values actually changed
-                            const newFinal = portCVEs.final.length;
-                            const newFiltered = portAnalysis[port].found - newFinal;
-                            
-                            if (portAnalysis[port].final !== newFinal || portAnalysis[port].filtered !== newFiltered) {
-                                portAnalysis[port].final = newFinal;
-                                portAnalysis[port].filtered = newFiltered;
-                                
-                                // Mark filtered CVEs IN PLACE (don't create new array)
-                                const finalIds = new Set(portCVEs.final);
-                                portAnalysis[port].cves.forEach(cve => {
-                                    cve.filtered = !finalIds.has(cve.id);
-                                });
-                                
-                                // Only mark as complete if:
-                                // - Single-pass mode, OR
-                                // - Multi-pass mode AND we've finished Pass 3 for THIS port
-                                // Check BOTH portCVEs.pass AND step text to confirm Pass 3
-                                const cvePass = portCVEs.pass || 1;
-                                const stepPassMatch = progressData.step.match(/Pass (\d+)\/3/);
-                                const stepPass = stepPassMatch ? parseInt(stepPassMatch[1]) : null;
-                                
-                                // Only complete if BOTH indicators show Pass 3, or if no pass info (single-pass)
-                                const isPass3 = (cvePass === 3) || (stepPass === 3);
-                                
-                                if (!isDeepAnalysis || isPass3) {
-                                    portAnalysis[port].status = 'complete';
-                                    
-                                    // When marking complete after Pass 3, ensure all validated CVEs show 3/3
-                                    if (isDeepAnalysis && isPass3 && portAnalysis[port].cves) {
-                                        portAnalysis[port].cves.forEach(cve => {
-                                            // If CVE is validated (not filtered), it passed all 3 passes
-                                            if (!cve.filtered && cve.passCount < 3) {
-                                                cve.passCount = 3;
-                                                console.log(`  ✓ Updated ${cve.id} to 3/3 passes (was ${cve.passCount})`);
-                                            }
-                                        });
-                                    }
-                                } else {
-                                    // Keep status as 'analyzing' during Pass 1 and 2
-                                    portAnalysis[port].status = 'analyzing';
-                                }
-                                
-                                totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
-                            }
-                        }
+                        // Update display array with cumulative pass counts from backend
+                        portAnalysis[port].cves = portCVEs.all_cves.map(cveId => {
+                            const passData = portCVEs.pass_data[cveId];
+                            return {
+                                id: cveId,
+                                passCount: passData?.pass_count || 0,  // Cumulative count up to this pass
+                                totalPasses: passData?.total_passes || portCVEs.pass,
+                                status: passData?.status || 'validating',
+                                filtered: passData?.status === 'filtered'
+                            };
+                        });
+                        
+                        // Calculate counts
+                        const validated = portAnalysis[port].cves.filter(c => c.passCount >= 2);
+                        const filtered = portAnalysis[port].cves.filter(c => c.status === 'filtered');
+                        
+                        portAnalysis[port].found = portCVEs.all_cves.length;
+                        portAnalysis[port].final = validated.length;
+                        portAnalysis[port].filtered = filtered.length;
+                        
+                        console.log(`📊 Pass ${portCVEs.pass}/3 complete: ${validated.length} validated, ${filtered.length} filtered`);
+                        
+                        // UPDATE DISPLAY ARRAY - this is what the user sees
+                        updateLivePortAnalysis();
+                    }
+                    // Stage 2: AI filtering complete - update working data only
+                    else if (portCVEs.status === 'ai_complete' && portCVEs.passed && portCVEs.failed) {
+                        // Store in working data, don't update display yet
+                        portAnalysis[port].workingData.ai_passed = portCVEs.passed;
+                        portAnalysis[port].workingData.ai_failed = portCVEs.failed;
+                        
+                        console.log(`🤖 AI filtered: ${portCVEs.passed.length} passed, ${portCVEs.failed.length} failed (working data only)`);
+                        // Don't call updateLivePortAnalysis() - wait for pass to complete
+                    }
+                    // Stage 1: NVD returned CVEs - update working data only
+                    else if (portCVEs.status === 'nvd_complete' && portCVEs.nvd_cves) {
+                        // Store in working data, don't update display yet
+                        portAnalysis[port].workingData.nvd_cves = portCVEs.nvd_cves;
+                        portAnalysis[port].pass = portCVEs.pass || 1;
+                        
+                        console.log(`📥 NVD returned ${portCVEs.nvd_cves.length} CVEs for port ${port} (working data only)`);
+                        // Don't call updateLivePortAnalysis() - wait for pass to complete
                     }
                 }
                 
+                // Update global totals
+                totalFound = Object.values(portAnalysis).reduce((sum, p) => sum + p.found, 0);
+                totalFiltered = Object.values(portAnalysis).reduce((sum, p) => sum + p.filtered, 0);
+                totalFinal = Object.values(portAnalysis).reduce((sum, p) => sum + p.final, 0);
+                
                 if (liveResultsPanel.style.display === 'none') {
                     liveResultsPanel.style.display = 'block';
+                }
+                
+                // If new ports were discovered, update display to show them
+                if (newPortsAdded) {
+                    updateLivePortAnalysis();
                 }
             }
             
@@ -959,9 +987,8 @@ function initializeMonitoring(scanId) {
                     }
                 }
                 
-                // Always call updateLivePortAnalysis - it has its own hash check
-                // This ensures we use the same hash calculation everywhere
-                updateLivePortAnalysis();
+                // Don't automatically update display - let stages control when to update
+                // This prevents flashing during intermediate stages
             }
             
             // Update pipeline roadmap

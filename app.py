@@ -57,11 +57,13 @@ def cleanup_old_scans():
         del scan_results[scan_id]
 
 
-def process_scan_file(file_path, use_ai=False, deep_analysis=True, progress_callback=None):
+def process_scan_file(file_path, use_ai=False, deep_analysis=True, progress_callback=None, selected_ports=None, ai_explanations=True):
     """Process a single scan file through the pipeline."""
     
     print("\n" + "🚀"*40)
     print(f"APP.PY: process_scan_file() called for: {file_path}")
+    print(f"Selected ports: {selected_ports}")
+    print(f"AI explanations: {ai_explanations}")
     print("🚀"*40 + "\n")
     
     def update_progress(step, percent, status='Processing', extra_data=None):
@@ -71,7 +73,7 @@ def process_scan_file(file_path, use_ai=False, deep_analysis=True, progress_call
     
     parser = NmapParser()
     processor = DataProcessor()
-    analyzer = VulnerabilityAnalyzer(use_ai=use_ai, deep_analysis=deep_analysis)
+    analyzer = VulnerabilityAnalyzer(use_ai=use_ai, deep_analysis=deep_analysis, ai_explanations=ai_explanations)
     reporter = ReportGenerator()
     
     # Parse
@@ -88,7 +90,7 @@ def process_scan_file(file_path, use_ai=False, deep_analysis=True, progress_call
     # Analyze (this is the slow part - NVD API calls)
     # Pass progress callback to analyzer for detailed updates
     update_progress('Starting vulnerability analysis', 50, 'Analyzing')
-    analysis_data = analyzer.analyze(processed_data, progress_callback=update_progress)
+    analysis_data = analyzer.analyze(processed_data, progress_callback=update_progress, selected_ports=selected_ports)
     
     # Generate web-friendly JSON
     update_progress('Generating results', 90, 'Finalizing')
@@ -266,10 +268,16 @@ def delete_scan(scan_id):
     return jsonify({'error': 'Scan not found'}), 404
 
 
-def process_files_async(scan_id, file_paths, use_ai, deep_analysis=True):
+def process_files_async(scan_id, file_paths, use_ai, deep_analysis=True, selected_ports=None, ai_explanations=True):
     """Process files asynchronously in background thread."""
     results = []
     errors = []
+    
+    # Store ai_explanations flag in scan_progress for later use
+    if scan_id in scan_progress:
+        scan_progress[scan_id]['ai_explanations'] = ai_explanations
+        scan_progress[scan_id]['use_ai'] = use_ai
+        scan_progress[scan_id]['deep_analysis'] = deep_analysis
     
     def update_file_progress(step, percent, status='Processing', extra_data=None):
         """Update progress for current file with detailed status and timing."""
@@ -301,26 +309,46 @@ def process_files_async(scan_id, file_paths, use_ai, deep_analysis=True):
                 'status': status
             })
         
-        # Handle CVE data updates
-        if extra_data and 'port' in extra_data and 'cves' in extra_data:
+        # Handle CVE data updates with new stage names
+        if extra_data and 'port' in extra_data:
             port = str(extra_data['port'])
-            cves = extra_data['cves']
-            stage = extra_data.get('stage', 'found')
+            stage = extra_data.get('stage', '')
             
-            print(f"📊 CVE UPDATE: Port {port}, Stage {stage}, CVEs: {cves}, Pass: {extra_data.get('pass', 'N/A')}")
+            print(f"📊 CVE UPDATE: Port {port}, Stage {stage}, Pass: {extra_data.get('pass', 'N/A')}")
             
             if port not in scan_progress[scan_id]['port_cves']:
-                scan_progress[scan_id]['port_cves'][port] = {'found': [], 'final': [], 'pass': 0}
+                scan_progress[scan_id]['port_cves'][port] = {}
             
-            if stage == 'found':
-                scan_progress[scan_id]['port_cves'][port]['found'] = cves
-                # Store the pass number if provided
-                if 'pass' in extra_data:
-                    scan_progress[scan_id]['port_cves'][port]['pass'] = extra_data['pass']
-                print(f"✅ Stored {len(cves)} found CVEs for port {port} (Pass {extra_data.get('pass', 'N/A')})")
-            elif stage == 'final':
-                scan_progress[scan_id]['port_cves'][port]['final'] = cves
-                print(f"✅ Stored {len(cves)} final CVEs for port {port}")
+            if stage == 'nvd_returned':
+                # NVD returned CVEs - show them immediately
+                scan_progress[scan_id]['port_cves'][port]['nvd_cves'] = extra_data.get('cves', [])
+                scan_progress[scan_id]['port_cves'][port]['pass'] = extra_data.get('pass', 1)
+                scan_progress[scan_id]['port_cves'][port]['status'] = extra_data.get('status', 'nvd_complete')
+                print(f"✅ NVD returned {len(extra_data.get('cves', []))} CVEs for port {port}")
+                
+            elif stage == 'ai_filtered':
+                # AI finished filtering - update pass/fail status
+                scan_progress[scan_id]['port_cves'][port]['passed'] = extra_data.get('passed', [])
+                scan_progress[scan_id]['port_cves'][port]['failed'] = extra_data.get('failed', [])
+                scan_progress[scan_id]['port_cves'][port]['status'] = extra_data.get('status', 'ai_complete')
+                print(f"✅ AI filtered: {len(extra_data.get('passed', []))} passed, {len(extra_data.get('failed', []))} failed")
+                
+            elif stage == 'pass_cumulative':
+                # Cumulative state after pass completes
+                scan_progress[scan_id]['port_cves'][port]['all_cves'] = extra_data.get('all_cves', [])
+                scan_progress[scan_id]['port_cves'][port]['pass_data'] = extra_data.get('pass_data', {})
+                scan_progress[scan_id]['port_cves'][port]['pass'] = extra_data.get('pass', 1)
+                scan_progress[scan_id]['port_cves'][port]['status'] = extra_data.get('status', 'analyzing')
+                print(f"✅ Pass {extra_data.get('pass')} complete: {len(extra_data.get('all_cves', []))} total CVEs")
+                
+            elif stage == 'consensus':
+                # Final consensus data
+                scan_progress[scan_id]['port_cves'][port]['found'] = extra_data.get('found', [])
+                scan_progress[scan_id]['port_cves'][port]['final'] = extra_data.get('final', [])
+                scan_progress[scan_id]['port_cves'][port]['filtered_count'] = extra_data.get('filtered_count', 0)
+                scan_progress[scan_id]['port_cves'][port]['consensus_data'] = extra_data.get('consensus_data', {})
+                scan_progress[scan_id]['port_cves'][port]['status'] = extra_data.get('status', 'complete')
+                print(f"✅ Consensus: {len(extra_data.get('final', []))} validated, {extra_data.get('filtered_count', 0)} filtered")
         
         scan_progress[scan_id].update({
             'step': f'{step} ({file_idx + 1}/{total_files})',
@@ -337,15 +365,19 @@ def process_files_async(scan_id, file_paths, use_ai, deep_analysis=True):
             scan_progress[scan_id]['current_file'] = idx
             
             try:
-                result = process_scan_file(file_path, use_ai=use_ai, deep_analysis=deep_analysis, progress_callback=update_file_progress)
+                result = process_scan_file(file_path, use_ai=use_ai, deep_analysis=deep_analysis, progress_callback=update_file_progress, selected_ports=selected_ports, ai_explanations=ai_explanations)
                 results.append({
                     'filename': filename,
                     'data': result
                 })
             except Exception as e:
+                import traceback
+                error_msg = str(e)
+                print(f"❌ ERROR processing {filename}: {error_msg}")
+                print(traceback.format_exc())
                 errors.append({
                     'filename': filename,
-                    'error': str(e)
+                    'error': error_msg
                 })
         
         # Store results with timing data
@@ -391,6 +423,20 @@ def upload():
     files = request.files.getlist('files[]')
     use_ai = request.form.get('use_ai') == 'true'
     deep_analysis = request.form.get('deep_analysis') == 'true'
+    ai_explanations = request.form.get('ai_explanations') == 'true'
+    
+    # Get selected ports filter
+    selected_ports = None
+    selected_ports_json = request.form.get('selected_ports')
+    if selected_ports_json:
+        try:
+            import json
+            selected_ports_raw = json.loads(selected_ports_json)
+            # Extract just port numbers from "ip:port" format
+            selected_ports = [p.split(':')[1] if ':' in p else p for p in selected_ports_raw]
+            print(f"📌 Port filter: {selected_ports}")
+        except Exception as e:
+            print(f"⚠️ Could not parse selected_ports: {e}")
     
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
@@ -449,6 +495,11 @@ def upload():
     discovered_ports = sorted(all_ports, key=int) if all_ports else []
     print(f"📋 Pre-discovered {len(discovered_ports)} ports: {discovered_ports}")
     
+    # Filter discovered ports by selected ports
+    if selected_ports:
+        discovered_ports = [p for p in discovered_ports if p in selected_ports]
+        print(f"📌 Filtered to selected ports: {discovered_ports}")
+    
     # Update progress
     scan_progress[scan_id].update({
         'step': 'Starting analysis',
@@ -457,13 +508,13 @@ def upload():
         'current_file': 0,
         'total_files': len(file_paths),
         'filenames': [filename for filename, _ in file_paths],
-        'discovered_ports': discovered_ports  # Send all ports to frontend
+        'discovered_ports': discovered_ports  # Send filtered ports to frontend
     })
     
     # Start async processing
     thread = threading.Thread(
         target=process_files_async,
-        args=(scan_id, file_paths, use_ai, deep_analysis),
+        args=(scan_id, file_paths, use_ai, deep_analysis, selected_ports, ai_explanations),
         daemon=True
     )
     thread.start()

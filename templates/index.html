@@ -17,18 +17,56 @@
 
         <div class="file-list" id="fileList"></div>
 
-        <div class="options">
-            <label class="checkbox-label">
-                <input type="checkbox" id="useAI" checked>
-                <span>Enable AI-enhanced analysis (recommended)</span>
-            </label>
-            <label class="checkbox-label" id="deepAnalysisOption" style="margin-top: 0.5rem;">
-                <input type="checkbox" id="useDeepAnalysis" checked>
-                <span>Deep analysis mode (iterative refinement - slower but more accurate)</span>
-            </label>
+        <!-- Port Preview Section (shown after file upload) -->
+        <div class="port-preview-section" id="portPreviewSection" style="display: none;">
+            <div class="port-preview-header">
+                <h3>📡 Discovered Ports</h3>
+                <p class="port-preview-subtitle">Select which ports to analyze</p>
+            </div>
+            <div class="port-preview-controls">
+                <button class="btn-link" id="selectAllPorts">Select All</button>
+                <span style="color: #95a5a6;">|</span>
+                <button class="btn-link" id="deselectAllPorts">Deselect All</button>
+            </div>
+            <div class="port-preview-content" id="portPreviewContent">
+                <div class="port-preview-loading">Scanning files for ports...</div>
+            </div>
         </div>
 
-        <button class="btn btn-primary" id="uploadBtn" disabled>
+        <!-- Customize Options (Expandable) -->
+        <div class="customize-section">
+            <button class="customize-toggle" id="customizeToggle">
+                <span class="toggle-icon">▶</span>
+                <span>Customize Options</span>
+            </button>
+            <div class="customize-content" id="customizeContent" style="display: none;">
+                <div class="customize-grid">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="useAI" checked>
+                        <span>
+                            <strong>AI-Enhanced Analysis</strong>
+                            <small>Use AI to validate CPE, optimize keywords, and filter false positives</small>
+                        </span>
+                    </label>
+                    <label class="checkbox-label" id="deepAnalysisOption">
+                        <input type="checkbox" id="useDeepAnalysis" checked>
+                        <span>
+                            <strong>Deep Analysis Mode</strong>
+                            <small>Multi-pass consensus analysis (3 passes) - slower but more accurate</small>
+                        </span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="useAIExplanations" checked>
+                        <span>
+                            <strong>AI Explanations</strong>
+                            <small>Generate detailed AI explanations for each vulnerability (uses API credits)</small>
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="uploadBtn" disabled>
             Analyze Scans
         </button>
 
@@ -150,6 +188,18 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 
 let selectedFiles = [];
+let discoveredPorts = {}; // {ip: [{port, service, product, version}, ...]}
+let selectedPorts = new Set(); // Set of "ip:port" strings
+
+// Customize toggle
+const customizeToggle = document.getElementById('customizeToggle');
+const customizeContent = document.getElementById('customizeContent');
+
+customizeToggle.addEventListener('click', () => {
+    const isOpen = customizeContent.style.display !== 'none';
+    customizeContent.style.display = isOpen ? 'none' : 'block';
+    customizeToggle.classList.toggle('open', !isOpen);
+});
 
 // Deep analysis option control
 const useAICheckbox = document.getElementById('useAI');
@@ -191,10 +241,13 @@ fileInput.addEventListener('change', (e) => {
     handleFiles(e.target.files);
 });
 
-function handleFiles(files) {
+async function handleFiles(files) {
     selectedFiles = Array.from(files);
     displayFiles();
     uploadBtn.disabled = selectedFiles.length === 0;
+    
+    // Parse files to discover ports
+    await discoverPorts(files);
 }
 
 function displayFiles() {
@@ -223,8 +276,153 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+// Port Discovery Functions
+async function discoverPorts(files) {
+    const portPreviewSection = document.getElementById('portPreviewSection');
+    const portPreviewContent = document.getElementById('portPreviewContent');
+    
+    portPreviewSection.style.display = 'block';
+    portPreviewContent.innerHTML = '<div class="port-preview-loading">Scanning files for ports...</div>';
+    
+    discoveredPorts = {};
+    selectedPorts.clear();
+    
+    for (const file of files) {
+        if (file.name.endsWith('.xml')) {
+            await parseXMLFile(file);
+        }
+    }
+    
+    displayDiscoveredPorts();
+}
+
+async function parseXMLFile(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(e.target.result, 'text/xml');
+            
+            // Parse hosts
+            const hosts = xmlDoc.getElementsByTagName('host');
+            for (const host of hosts) {
+                const addressEl = host.querySelector('address[addrtype="ipv4"]');
+                if (!addressEl) continue;
+                
+                const ip = addressEl.getAttribute('addr');
+                if (!discoveredPorts[ip]) {
+                    discoveredPorts[ip] = [];
+                }
+                
+                // Parse ports
+                const ports = host.querySelectorAll('port[protocol="tcp"]');
+                for (const portEl of ports) {
+                    const state = portEl.querySelector('state');
+                    if (state && state.getAttribute('state') === 'open') {
+                        const portNum = portEl.getAttribute('portid');
+                        const serviceEl = portEl.querySelector('service');
+                        
+                        const portInfo = {
+                            port: portNum,
+                            service: serviceEl ? serviceEl.getAttribute('name') : 'unknown',
+                            product: serviceEl ? serviceEl.getAttribute('product') : '',
+                            version: serviceEl ? serviceEl.getAttribute('version') : ''
+                        };
+                        
+                        discoveredPorts[ip].push(portInfo);
+                        selectedPorts.add(`${ip}:${portNum}`); // Select all by default
+                    }
+                }
+            }
+            resolve();
+        };
+        reader.readAsText(file);
+    });
+}
+
+function displayDiscoveredPorts() {
+    const portPreviewContent = document.getElementById('portPreviewContent');
+    
+    if (Object.keys(discoveredPorts).length === 0) {
+        portPreviewContent.innerHTML = '<div class="port-preview-loading">No open ports found in scan files</div>';
+        return;
+    }
+    
+    let html = '';
+    for (const [ip, ports] of Object.entries(discoveredPorts)) {
+        html += `
+            <div class="port-ip-group">
+                <div class="port-ip-header">
+                    <span>🖥️ ${ip}</span>
+                    <span class="port-ip-count">${ports.length} ports</span>
+                </div>
+                <div class="port-ip-ports">
+        `;
+        
+        ports.forEach(portInfo => {
+            const key = `${ip}:${portInfo.port}`;
+            const isSelected = selectedPorts.has(key);
+            html += `
+                <div class="port-item ${isSelected ? 'selected' : ''}" data-key="${key}" onclick="togglePortByClick('${key}')">
+                    <div class="port-item-header">
+                        <span class="port-number">Port ${portInfo.port}</span>
+                        <input type="checkbox" class="port-checkbox" data-port-key="${key}" ${isSelected ? 'checked' : ''}>
+                    </div>
+                    <div class="port-service">${portInfo.service}</div>
+                    ${portInfo.product ? `<div class="port-product">${portInfo.product}</div>` : ''}
+                    ${portInfo.version ? `<div class="port-version">v${portInfo.version}</div>` : ''}
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    portPreviewContent.innerHTML = html;
+}
+
+function togglePort(key) {
+    if (selectedPorts.has(key)) {
+        selectedPorts.delete(key);
+    } else {
+        selectedPorts.add(key);
+    }
+    
+    // Update UI
+    const portItem = document.querySelector(`[data-key="${key}"]`);
+    if (portItem) {
+        portItem.classList.toggle('selected', selectedPorts.has(key));
+        const checkbox = portItem.querySelector('.port-checkbox');
+        if (checkbox) {
+            checkbox.checked = selectedPorts.has(key);
+        }
+    }
+}
+
+function togglePortByClick(key) {
+    togglePort(key);
+}
+
+// Select/Deselect All buttons
+document.getElementById('selectAllPorts').addEventListener('click', () => {
+    selectedPorts.clear();
+    for (const [ip, ports] of Object.entries(discoveredPorts)) {
+        ports.forEach(p => selectedPorts.add(`${ip}:${p.port}`));
+    }
+    displayDiscoveredPorts();
+});
+
+document.getElementById('deselectAllPorts').addEventListener('click', () => {
+    selectedPorts.clear();
+    displayDiscoveredPorts();
+});
+
 // Upload button
-uploadBtn.addEventListener('click', async () => {
+uploadBtn.addEventListener('click', async (e) => {
+    e.preventDefault(); // Prevent any default form behavior
     if (selectedFiles.length === 0) return;
 
     const formData = new FormData();
@@ -233,6 +431,19 @@ uploadBtn.addEventListener('click', async () => {
     });
     formData.append('use_ai', document.getElementById('useAI').checked);
     formData.append('deep_analysis', document.getElementById('useDeepAnalysis').checked);
+    formData.append('ai_explanations', document.getElementById('useAIExplanations').checked);
+    
+    // Send selected ports filter
+    const selectedPortsArray = Array.from(selectedPorts);
+    console.log('Selected ports:', selectedPortsArray);
+    
+    if (selectedPortsArray.length > 0) {
+        const portsJson = JSON.stringify(selectedPortsArray);
+        console.log('Sending ports JSON:', portsJson);
+        formData.append('selected_ports', portsJson);
+    } else {
+        console.warn('No ports selected - analyzing all ports');
+    }
 
     uploadBtn.disabled = true;
     progressSection.style.display = 'block';
@@ -244,6 +455,7 @@ uploadBtn.addEventListener('click', async () => {
 
     try {
         // Start upload (non-blocking)
+        console.log('Starting upload...');
         const uploadPromise = fetch('/upload', {
             method: 'POST',
             body: formData
@@ -251,10 +463,14 @@ uploadBtn.addEventListener('click', async () => {
 
         // Wait briefly for scan ID to be created
         const response = await uploadPromise;
+        console.log('Response status:', response.status, response.statusText);
+        
         const result = await response.json();
+        console.log('Response JSON:', result);
 
         if (response.ok) {
             scanId = result.scan_id;
+            console.log('Scan ID:', scanId);
             
             // Store scan ID in localStorage for persistence
             localStorage.setItem('activeScanId', scanId);
@@ -800,6 +1016,8 @@ uploadBtn.addEventListener('click', async () => {
         }
     } catch (error) {
         if (progressInterval) clearInterval(progressInterval);
+        console.error('Upload error:', error);
+        console.error('Error stack:', error.stack);
         alert('Error: ' + error.message);
         uploadBtn.disabled = false;
         progressSection.style.display = 'none';

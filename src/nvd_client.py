@@ -109,34 +109,59 @@ class NVDClient:
         
         print(f"Querying NVD by CPE: {cpe_23}")
         
-        self._rate_limit()
-        
-        params = {
-            'cpeName': cpe_23,
-            'resultsPerPage': 100
-        }
+        all_cves = []
+        start_index = 0
+        results_per_page = 100
         
         headers = {}
         if self.api_key:
             headers['apiKey'] = self.api_key
         
-        try:
-            response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
-            response.raise_for_status()
+        while True:
+            self._rate_limit()
             
-            data = response.json()
-            cves = self._parse_cve_response(data)
+            params = {
+                'cpeName': cpe_23,
+                'resultsPerPage': results_per_page,
+                'startIndex': start_index
+            }
             
-            print(f"Found {len(cves)} CVEs for CPE: {cpe_23}")
-            
-            # Cache the results
-            self.cache[cache_key] = cves
-            
-            return cves
-            
-        except requests.exceptions.RequestException as e:
-            print(f"NVD API error for CPE query: {e}")
-            return []
+            try:
+                response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                total_results = data.get('totalResults', 0)
+                
+                # Debug: Show what NVD returned on first page
+                if start_index == 0:
+                    print(f"  → NVD reports {total_results} total CVEs available for this CPE")
+                    if total_results == 0:
+                        break  # No results, exit immediately
+                
+                page_cves = self._parse_cve_response(data)
+                
+                if not page_cves:
+                    break
+                
+                all_cves.extend(page_cves)
+                
+                # Check if we've retrieved all results
+                if start_index + results_per_page >= total_results:
+                    print(f"CPE query: Retrieved all {len(all_cves)} CVEs (total available: {total_results})")
+                    break
+                
+                start_index += results_per_page
+                print(f"CPE query: Fetching next page... (retrieved {len(all_cves)}/{total_results} so far)")
+                
+            except requests.exceptions.RequestException as e:
+                print(f"NVD API error for CPE query: {e}")
+                break
+        
+        # Cache the results
+        self.cache[cache_key] = all_cves
+        
+        return all_cves
     
     def search_cves_by_keyword(self, product: str, version: str = None, prioritize_kev: bool = True) -> List[Dict]:
         """
@@ -180,36 +205,63 @@ class NVDClient:
         return all_cves
     
     def _search_with_params(self, keyword: str, has_kev: bool = False, severity: str = None) -> List[Dict]:
-        """Internal method to search with specific filter parameters."""
-        self._rate_limit()
-        
-        params = {
-            'keywordSearch': keyword,
-            'resultsPerPage': 100  # Increased from default 20
-        }
-        
-        if has_kev:
-            params['hasKev'] = ''  # Flag parameter, no value needed
-        
-        if severity:
-            params['cvssV3Severity'] = severity
+        """Internal method to search with specific filter parameters. Paginates through results with a max limit."""
+        all_cves = []
+        start_index = 0
+        results_per_page = 100
         
         headers = {}
         if self.api_key:
             headers['apiKey'] = self.api_key
         
-        try:
-            response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
-            response.raise_for_status()
+        while True:
+            self._rate_limit()
             
-            data = response.json()
-            cves = self._parse_cve_response(data)
+            params = {
+                'keywordSearch': keyword,
+                'resultsPerPage': results_per_page,
+                'startIndex': start_index
+            }
             
-            return cves
+            if has_kev:
+                params['hasKev'] = ''  # Flag parameter, no value needed
             
-        except requests.exceptions.RequestException as e:
-            print(f"NVD API error: {e}")
-            return []
+            if severity:
+                params['cvssV3Severity'] = severity
+            
+            try:
+                response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                total_results = data.get('totalResults', 0)
+                
+                # Debug: Show what NVD returned on first page
+                if start_index == 0:
+                    print(f"  → NVD reports {total_results} total CVEs available for keyword '{keyword}'")
+                    if total_results == 0:
+                        break  # No results, exit immediately
+                
+                page_cves = self._parse_cve_response(data)
+                
+                if not page_cves:
+                    break
+                
+                all_cves.extend(page_cves)
+                
+                # Check if we've retrieved all results
+                if start_index + results_per_page >= total_results:
+                    print(f"Retrieved all {len(all_cves)} CVEs (total available: {total_results})")
+                    break
+                
+                start_index += results_per_page
+                print(f"Fetching next page... (retrieved {len(all_cves)}/{total_results} so far)")
+                
+            except requests.exceptions.RequestException as e:
+                print(f"NVD API error: {e}")
+                break
+        
+        return all_cves
     
     def _parse_cve_response(self, data: Dict) -> List[Dict]:
         """

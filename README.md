@@ -176,62 +176,103 @@ These demonstrate:
 
 ## Architecture
 
+### Backend Processing Pipeline
+
 ```
 User uploads Nmap scan(s) with -sV flag
          ↓
    Flask Web Server (app.py)
-   - Async processing with progress tracking
-   - Real-time CVE updates via WebSocket-style polling
+   - Async processing with progress callbacks
+   - Port filtering based on user selection
          ↓
-   Parser (extracts CPE, OS, services)
+   Parser (src/parser.py)
+   - Extracts CPE, OS, services from Nmap XML
+   - Preserves version detection data
          ↓
-   Processor (preserves CPE data)
+   Processor (src/processor.py)
+   - Normalizes service data
+   - Maintains CPE strings for analyzer
          ↓
-   ┌─────────────────────────────────────────┐
-   │  Analyzer - Multi-Pass Consensus System │
-   │  ┌─────────────────────────────────┐    │
-   │  │ Pass 1: Initial CVE Detection   │    │
-   │  │  - CPE-first matching           │    │
-   │  │  - Keyword fallback             │    │
-   │  │  - AI false positive filtering  │    │
-   │  └─────────────────────────────────┘    │
-   │              ↓                           │
-   │  ┌─────────────────────────────────┐    │
-   │  │ Pass 2: Validation Pass         │    │
-   │  │  - Re-run detection             │    │
-   │  │  - Track consensus              │    │
-   │  │  - CVEs with 2/3 → VALIDATED    │    │
-   │  └─────────────────────────────────┘    │
-   │              ↓                           │
-   │  ┌─────────────────────────────────┐    │
-   │  │ Pass 3: Final Confirmation      │    │
-   │  │  - Final consensus check        │    │
-   │  │  - Assign confidence levels     │    │
-   │  │  - Filter low-confidence CVEs   │    │
-   │  └─────────────────────────────────┘    │
-   └─────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────┐
+   │  Analyzer - Multi-Pass Consensus System (src/analyzer.py)│
+   │                                                            │
+   │  FOR EACH PASS (1-3):                                     │
+   │  ┌──────────────────────────────────────────────────┐    │
+   │  │ Stage 1: NVD Query                               │    │
+   │  │  - AI-enhanced CPE generation (if enabled)       │    │
+   │  │  - Query NVD by CPE (primary strategy)           │    │
+   │  │  - Keyword search fallback (supplemental)        │    │
+   │  │  - Pagination: 100 CVEs/page, fetches all        │    │
+   │  │  - 200ms delay after sending progress update     │    │
+   │  └──────────────────────────────────────────────────┘    │
+   │              ↓                                             │
+   │  ┌──────────────────────────────────────────────────┐    │
+   │  │ Stage 2: AI Filtering (if deep_analysis enabled) │    │
+   │  │  - Batch CVEs for efficiency                     │    │
+   │  │  - AI validates applicability to detected service│    │
+   │  │  - Filters false positives                       │    │
+   │  │  - Assigns confidence scores                     │    │
+   │  └──────────────────────────────────────────────────┘    │
+   │              ↓                                             │
+   │  ┌──────────────────────────────────────────────────┐    │
+   │  │ Stage 3: Cumulative Pass Data                    │    │
+   │  │  - Track CVE appearances across passes           │    │
+   │  │  - Increment consensus_score (0-3)               │    │
+   │  │  - Mark as 'validated' when score ≥ 2            │    │
+   │  │  - Send cumulative data to frontend              │    │
+   │  └──────────────────────────────────────────────────┘    │
+   │                                                            │
+   │  AFTER ALL 3 PASSES:                                      │
+   │  ┌──────────────────────────────────────────────────┐    │
+   │  │ Stage 4: Consensus Finalization                  │    │
+   │  │  - Aggregate all pass results                    │    │
+   │  │  - Final CVEs = consensus_score ≥ 2              │    │
+   │  │  - Filtered CVEs = consensus_score < 2           │    │
+   │  │  - Preserve all metadata (score, reasoning)      │    │
+   │  └──────────────────────────────────────────────────┘    │
+   └──────────────────────────────────────────────────────────┘
          ↓
-   NVD Client (CPE queries + keyword search)
+   NVD Client (src/nvd_client.py)
+   - CPE 2.3 format conversion
+   - Paginated API queries (handles >100 CVEs)
+   - Rate limiting (6s delay between requests)
+   - In-memory caching
+   - CVSS severity recalculation for consistency
          ↓
-   Confidence Assignment
-   - High: 3/3 passes
-   - Medium: 2/3 passes  
-   - Low: 1/3 passes (filtered)
-         ↓
-   AI Explainer (Claude Haiku 4.5)
+   AI Explainer (src/explainer.py) [Optional]
+   - Generates explanations only if ai_explanations=True
    - 6 standardized sections per CVE
-   - Validation assessment
-   - Remediation guidance
+   - Uses Claude Haiku 4.5
          ↓
-   Reporter (HTML + JSON)
-   - Valid vulnerabilities (2+ pass consensus)
-   - Filtered false positives (with reasons)
-         ↓
-   Web Interface Display
-   - Live Monitor (real-time progress)
-   - Summary Dashboard
-   - Detailed Reports
+   Reporter (src/reporter.py)
+   - Aggregates validated CVEs (consensus_score ≥ 2)
+   - Includes filtered CVEs with filter reasons
+   - Generates HTML + JSON output
+   - Preserves pass counts and confidence metadata
 ```
+
+### Key Processing Decisions
+
+**Multi-Pass Consensus Logic:**
+- Each CVE tracked across 3 independent passes
+- `consensus_score` = number of passes CVE appeared in (0-3)
+- **Validated**: consensus_score ≥ 2 (appeared in 2+ passes)
+- **Filtered**: consensus_score < 2 (appeared in <2 passes, likely false positive)
+
+**NVD Query Strategy:**
+1. AI-enhanced CPE generation (if AI enabled)
+2. Primary: Query by CPE string (most accurate)
+3. Supplemental: Keyword search (catches CPE-less services)
+4. Pagination: Fetches all results (100 per page)
+
+**Progress Callback Timing:**
+- 200ms delay after NVD query stage to ensure frontend captures update
+- Prevents rapid updates from overwriting each other
+
+**Port Filtering:**
+- Backend filters ports before analysis based on user selection
+- Only selected ports sent to analyzer
+- Reduces API calls and processing time
 
 ---
 
